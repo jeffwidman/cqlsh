@@ -10,7 +10,7 @@ setup(
     maintainer='Andrew Mussey',
     maintainer_email='admin@ajama.org',
     url='https://github.com/amussey/cqlsh',
-    install_requires=["cql"],
+    install_requires=[],
     packages=['cqlshlib'],
     scripts = [
         'cqlsh',
