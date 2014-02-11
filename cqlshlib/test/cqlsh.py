@@ -1,1 +1,0 @@
-/Users/andr6464/Documents/nonwork_git/cqlsh/cqlsh_latest/bin/cqlsh

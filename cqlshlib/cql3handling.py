@@ -63,12 +63,12 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
     columnfamily_layout_options = (
         ('bloom_filter_fp_chance', None),
         ('caching', None),
+        ('rows_per_partition_to_cache', None),
         ('comment', None),
         ('dclocal_read_repair_chance', 'local_read_repair_chance'),
         ('gc_grace_seconds', None),
         ('index_interval', None),
         ('read_repair_chance', None),
-        ('replicate_on_write', None),
         ('populate_io_cache_on_flush', None),
         ('default_time_to_live', None),
         ('speculative_retry', None),
@@ -927,7 +927,7 @@ def create_cf_composite_primary_key_comma_completer(ctxt, cass):
 syntax_rules += r'''
 <createIndexStatement> ::= "CREATE" "CUSTOM"? "INDEX" ("IF" "NOT" "EXISTS")? indexname=<identifier>? "ON"
                                cf=<columnFamilyName> "(" col=<cident> ")"
-                               ( "USING" <stringLiteral> )?
+                               ( "USING" <stringLiteral> ( "WITH" "OPTIONS" "=" <mapLiteral> )? )?
                          ;
 '''
 
