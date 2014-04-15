@@ -20,7 +20,7 @@ setup(
     keywords='python cql cassandra cqlsh',
     maintainer='Andrew Mussey',
     maintainer_email='admin@ajama.org',
-    url='https://github.com/amussey/cqlsh',
+    url='http://git-wip-us.apache.org/repos/asf/cassandra.git',
     platforms=['any'],
     license="http://www.apache.org/licenses/LICENSE-2.0",
     install_requires=['cql', 'simplejson', 'unittest2'],
