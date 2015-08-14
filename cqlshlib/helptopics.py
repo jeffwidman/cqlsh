@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cql.cqltypes import cql_types
+from .cql3handling import simple_cql_types
 
 class CQLHelpTopics(object):
     def get_help_topics(self):
@@ -25,7 +25,7 @@ class CQLHelpTopics(object):
 
     def help_types(self):
         print "\n        CQL types recognized by this version of cqlsh:\n"
-        for t in cql_types:
+        for t in simple_cql_types:
             print '          ' + t
         print """
         For information on the various recognizable input formats for these
@@ -33,9 +33,12 @@ class CQLHelpTopics(object):
         one of the following topics:
 
           HELP TIMESTAMP_INPUT
+          HELP DATE_INPUT
+          HELP TIME_INPUT
           HELP BLOB_INPUT
           HELP UUID_INPUT
           HELP BOOLEAN_INPUT
+          HELP INT_INPUT
 
           HELP TEXT_OUTPUT
           HELP TIMESTAMP_OUTPUT
@@ -69,6 +72,27 @@ class CQLHelpTopics(object):
         server node will be used.
         """
 
+    def help_date_input(self):
+        print """
+        Date input
+
+        CQL supports the following format for date specification:
+
+          yyyy-mm-dd
+        """
+
+    def help_time_input(self):
+        print """
+        Time input
+
+        CQL supports the following format for time specification:
+
+          HH:MM:SS
+          HH:MM:SS.mmm
+          HH:MM:SS.mmmuuu
+          HH:MM:SS.mmmuuunnn
+        """
+
     def help_blob_input(self):
         print """
         Blob input
@@ -94,6 +118,17 @@ class CQLHelpTopics(object):
 
         CQL accepts the strings 'true' and 'false' (case insensitive)
         as input for boolean types.
+        """
+
+    def help_int_input(self):
+        print """
+        Integer input
+
+        CQL accepts the following integer types:
+          tinyint  - 1-byte signed integer
+          smallint - 2-byte signed integer
+          int      - 4-byte signed integer
+          bigint   - 8-byte signed integer
         """
 
     def help_timestamp_output(self):
@@ -148,6 +183,8 @@ class CQLHelpTopics(object):
           HELP DROP_KEYSPACE;
           HELP DROP_TABLE;
           HELP DROP_INDEX;
+          HELP DROP_FUNCTION;
+          HELP DROP_AGGREGATE;
         """
 
     def help_drop_keyspace(self):
@@ -176,6 +213,37 @@ class CQLHelpTopics(object):
         A DROP INDEX statement is used to drop an existing secondary index.
         """
 
+    def help_drop_function(self):
+        print """
+        DROP FUNCTION ( IF EXISTS )?
+                         ( <keyspace> '.' )? <function-name>
+                         ( '(' <arg-type> ( ',' <arg-type> )* ')' )?
+
+        DROP FUNCTION statement removes a function created using CREATE FUNCTION.
+        You must specify the argument types (signature) of the function to drop if there
+        are multiple functions with the same name but a different signature
+        (overloaded functions).
+
+        DROP FUNCTION with the optional IF EXISTS keywords drops a function if it exists.
+        """
+
+    def help_drop_aggregate(self):
+        print """
+        DROP AGGREGATE ( IF EXISTS )?
+                         ( <keyspace> '.' )? <aggregate-name>
+                         ( '(' <arg-type> ( ',' <arg-type> )* ')' )?
+
+        The DROP AGGREGATE statement removes an aggregate created using CREATE AGGREGATE.
+        You must specify the argument types of the aggregate to drop if there are multiple
+        aggregates with the same name but a different signature (overloaded aggregates).
+
+        DROP AGGREGATE with the optional IF EXISTS keywords drops an aggregate if it exists,
+        and does nothing if a function with the signature does not exist.
+
+        Signatures for user-defined aggregates follow the same rules as for
+        user-defined functions.
+        """
+
     def help_truncate(self):
         print """
         TRUNCATE <tablename>;
@@ -192,6 +260,8 @@ class CQLHelpTopics(object):
           HELP CREATE_KEYSPACE;
           HELP CREATE_TABLE;
           HELP CREATE_INDEX;
+          HELP CREATE_FUNCTION;
+          HELP CREATE_AGGREGATE;
         """
 
     def help_use(self):
@@ -205,8 +275,97 @@ class CQLHelpTopics(object):
         terminates.
 
         As always, when a keyspace name does not work as a normal identifier or
-        number, it can be quoted using single quotes (CQL 2) or double quotes
-        (CQL 3).
+        number, it can be quoted using double quotes.
+        """
+
+    def help_create_aggregate(self):
+        print """
+        CREATE ( OR REPLACE )? AGGREGATE ( IF NOT EXISTS )?
+                            ( <keyspace> '.' )? <aggregate-name>
+                            '(' <arg-type> ( ',' <arg-type> )* ')'
+                            SFUNC ( <keyspace> '.' )? <state-functionname>
+                            STYPE <state-type>
+                            ( FINALFUNC ( <keyspace> '.' )? <final-functionname> )?
+                            ( INITCOND <init-cond> )?
+
+        CREATE AGGREGATE creates or replaces a user-defined aggregate.
+
+        CREATE AGGREGATE with the optional OR REPLACE keywords either creates an aggregate
+        or replaces an existing one with the same signature. A CREATE AGGREGATE without
+        OR REPLACE fails if an aggregate with the same signature already exists.
+
+        CREATE AGGREGATE with the optional IF NOT EXISTS keywords either creates an aggregate
+        if it does not already exist.
+
+        OR REPLACE and IF NOT EXIST cannot be used together.
+
+        Aggregates belong to a keyspace. If no keyspace is specified in <aggregate-name>, the
+        current keyspace is used (i.e. the keyspace specified using the USE statement). It is
+        not possible to create a user-defined aggregate in one of the system keyspaces.
+
+        Signatures for user-defined aggregates follow the same rules as for
+        user-defined functions.
+
+        STYPE defines the type of the state value and must be specified.
+
+        The optional INITCOND defines the initial state value for the aggregate. It defaults
+        to null. A non-null INITCOND must be specified for state functions that are declared
+        with RETURNS NULL ON NULL INPUT.
+
+        SFUNC references an existing function to be used as the state modifying function. The
+        type of first argument of the state function must match STYPE. The remaining argument
+        types of the state function must match the argument types of the aggregate function.
+        State is not updated for state functions declared with RETURNS NULL ON NULL INPUT and
+        called with null.
+
+        The optional FINALFUNC is called just before the aggregate result is returned. It must
+        take only one argument with type STYPE. The return type of the FINALFUNC may be a
+        different type. A final function declared with RETURNS NULL ON NULL INPUT means that
+        the aggregate's return value will be null, if the last state is null.
+
+        If no FINALFUNC is defined, the overall return type of the aggregate function is STYPE.
+        If a FINALFUNC is defined, it is the return type of that function.
+        """
+
+    def help_create_function(self):
+        print """
+        CREATE ( OR REPLACE )? FUNCTION ( IF NOT EXISTS )?
+                            ( <keyspace> '.' )? <function-name>
+                            '(' <arg-name> <arg-type> ( ',' <arg-name> <arg-type> )* ')'
+                            ( CALLED | RETURNS NULL ) ON NULL INPUT
+                            RETURNS <type>
+                            LANGUAGE <language>
+                            AS <body>
+
+        CREATE FUNCTION creates or replaces a user-defined function.
+
+        Signatures are used to distinguish individual functions. The signature consists of:
+
+        The fully qualified function name - i.e keyspace plus function-name
+        The concatenated list of all argument types
+
+        Note that keyspace names, function names and argument types are subject to the default
+        naming conventions and case-sensitivity rules.
+
+        CREATE FUNCTION with the optional OR REPLACE keywords either creates a function or
+        replaces an existing one with the same signature. A CREATE FUNCTION without OR REPLACE
+        fails if a function with the same signature already exists.
+
+        Behavior on invocation with null values must be defined for each function. There are
+        two options:
+
+        RETURNS NULL ON NULL INPUT declares that the function will always return null if any
+        of the input arguments is null. CALLED ON NULL INPUT declares that the function will
+        always be executed.
+
+        If the optional IF NOT EXISTS keywords are used, the function will only be created if
+        another function with the same signature does not exist.
+
+        OR REPLACE and IF NOT EXIST cannot be used together.
+
+        Functions belong to a keyspace. If no keyspace is specified in <function-name>, the
+        current keyspace is used (i.e. the keyspace specified using the USE statement).
+        It is not possible to create a user-defined function in one of the system keyspaces.
         """
 
     def help_create_table(self):
@@ -388,7 +547,7 @@ class CQLHelpTopics(object):
 
         Counter columns can be incremented or decremented by an arbitrary
         numeric value though the assignment of an expression that adds or
-        substracts the value.
+        subtracts the value.
         """
 
     def help_update_where(self):
@@ -563,7 +722,8 @@ class CQL3HelpTopics(CQLHelpTopics):
         UPDATE [<keyspace>.]<columnFamily>
                               [USING [TIMESTAMP <timestamp>]
                                 [AND TTL <timeToLive>]]
-               SET name1 = value1, name2 = value2 WHERE <keycol> = keyval;
+               SET name1 = value1, name2 = value2 WHERE <keycol> = keyval
+               [IF EXISTS];
 
         An UPDATE is used to write one or more columns to a record in a table.
         No results are returned. The record's primary key must be completely
@@ -608,7 +768,7 @@ class CQL3HelpTopics(CQLHelpTopics):
                     ( <colname1>, <colname2> [, <colname3> [, ...]] )
                VALUES ( <colval1>, <colval2> [, <colval3> [, ...]] )
                [USING TIMESTAMP <timestamp>]
-                 [AND TTL <timeToLive]];
+                 [AND TTL <timeToLive>];
 
         An INSERT is used to write one or more columns to a record in a
         CQL table. No results are returned.
@@ -667,7 +827,9 @@ class CQL3HelpTopics(CQLHelpTopics):
 
     def help_create(self):
         super(CQL3HelpTopics, self).help_create()
-        print "          HELP CREATE_USER;\n"
+        print """          HELP CREATE_USER;
+          HELP CREATE_ROLE;
+        """
 
     def help_alter(self):
         print """
@@ -703,8 +865,10 @@ class CQL3HelpTopics(CQLHelpTopics):
         """
 
     def help_drop(self):
-        super(CQL3HelpTopics, self).help_drop()
-        print "          HELP DROP_USER;\n"
+        super(CQL3HelpTopics, self).help_create()
+        print """          HELP DROP_USER;
+          HELP DROP_ROLE;
+        """
 
     def help_list(self):
         print """
@@ -759,10 +923,10 @@ class CQL3HelpTopics(CQLHelpTopics):
                   ON ALL KEYSPACES
                    | KEYSPACE <keyspace>
                    | [TABLE] [<keyspace>.]<table>
-                  TO <username>
+                  TO [ROLE <rolename> | USER <username>]
 
         Grant the specified permission (or all permissions) on a resource
-        to a user.
+        to a role or user.
 
         To be able to grant a permission on some resource you have to
         have that permission yourself and also AUTHORIZE permission on it,
@@ -777,10 +941,10 @@ class CQL3HelpTopics(CQLHelpTopics):
                   ON ALL KEYSPACES
                    | KEYSPACE <keyspace>
                    | [TABLE] [<keyspace>.]<table>
-                  FROM <username>
+                  FROM [ROLE <rolename> | USER <username>]
 
         Revokes the specified permission (or all permissions) on a resource
-        from a user.
+        from a role or user.
 
         To be able to revoke a permission on some resource you have to
         have that permission yourself and also AUTHORIZE permission on it,
@@ -795,12 +959,13 @@ class CQL3HelpTopics(CQLHelpTopics):
                   [ON ALL KEYSPACES
                     | KEYSPACE <keyspace>
                     | [TABLE] [<keyspace>.]<table>]
-                  [OF <username>]
+                  [OF [ROLE <rolename> | USER <username>]
                   [NORECURSIVE]
 
         Omitting ON <resource> part will list permissions on ALL KEYSPACES,
         every keyspace and table.
-        Omitting OF <username> part will list permissions of all users.
+        Omitting OF [ROLE <rolename> | USER <username>] part will list permissions
+        of all roles and users.
         Omitting NORECURSIVE specifier will list permissions of the resource
         and all its parents (table, table's keyspace and ALL KEYSPACES).
 
@@ -818,4 +983,47 @@ class CQL3HelpTopics(CQLHelpTopics):
           DROP: required for DROP KEYSPACE, DROP TABLE
           MODIFY: required for INSERT, DELETE, UPDATE, TRUNCATE
           SELECT: required for SELECT
+        """
+
+    def help_create_role(self):
+        print """
+        CREATE ROLE <rolename>;
+
+        CREATE ROLE creates a new Cassandra role.
+        Only superusers can issue CREATE ROLE requests.
+        To create a superuser account use SUPERUSER option (NOSUPERUSER is the default).
+        """
+
+    def help_drop_role(self):
+        print """
+        DROP ROLE <rolename>;
+
+        DROP ROLE removes an existing role. You have to be logged in as a superuser
+        to issue a DROP ROLE statement.
+        """
+
+    def help_list_roles(self):
+        print """
+        LIST ROLES [OF [ROLE <rolename> | USER <username>] [NORECURSIVE]];
+
+        Only superusers can use the OF clause to list the roles granted to a role or user.
+        If a superuser omits the OF clause then all the created roles will be listed.
+        If a non-superuser calls LIST ROLES then the roles granted to that user are listed.
+        If NORECURSIVE is provided then only directly granted roles are listed.
+        """
+
+    def help_grant_role(self):
+        print """
+        GRANT ROLE <rolename> TO [ROLE <rolename> | USER <username>]
+
+        Grant the specified role to another role or user. You have to be logged
+        in as superuser to issue a GRANT ROLE statement.
+        """
+
+    def help_revoke_role(self):
+        print """
+        REVOKE ROLE <rolename> FROM [ROLE <rolename> | USER <username>]
+
+        Revoke the specified role from another role or user. You have to be logged
+        in as superuser to issue a REVOKE ROLE statement.
         """

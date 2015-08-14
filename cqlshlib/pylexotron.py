@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
 import re
 from .saferscanner import SaferScanner
 
@@ -24,6 +23,9 @@ class LexingError(Exception):
         bad_char = len(rulestr) - len(unmatched)
         linenum = rulestr[:bad_char].count('\n') + 1
         charnum = len(rulestr[:bad_char].rsplit('\n', 1)[-1]) + 1
+        snippet_start = max(0, min(len(rulestr), bad_char - 10))
+        snippet_end = max(0, min(len(rulestr), bad_char + 10))
+        msg += " (Error at: '...%s...')" % (rulestr[snippet_start:snippet_end],)
         raise cls(linenum, charnum, msg)
 
     def __init__(self, linenum, charnum, msg='Lexing error'):
@@ -98,7 +100,17 @@ class ParseContext:
             # pretty much just guess
             return ' '.join([t[1] for t in tokens])
         # low end of span for first token, to high end of span for last token
-        return orig[tokens[0][2][0]:tokens[-1][2][1]]
+        orig_text = orig[tokens[0][2][0]:tokens[-1][2][1]]
+
+        # Convert all unicode tokens to ascii, where possible.  This
+        # helps avoid problems with performing unicode-incompatible
+        # operations on tokens (like .lower()).  See CASSANDRA-9083
+        # for one example of this.
+        try:
+            orig_text = orig_text.encode('ascii')
+        except UnicodeEncodeError:
+            pass
+        return orig_text
 
     def __repr__(self):
         return '<%s matched=%r remainder=%r prodname=%r bindings=%r>' \
