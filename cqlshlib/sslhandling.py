@@ -17,15 +17,15 @@
 import os
 import sys
 import ConfigParser
-from thrift.transport import TSSLSocket, TTransport
+import ssl
 
-def ssl_transport_factory(host, port, env, config_file):
+
+def ssl_settings(host, config_file, env=os.environ):
     """
-    SSL Thrift transport factory function.
+    Function wcich generates SSL setting for cassandra.Cluster
 
     Params:
     * host .........: hostname of Cassandra node.
-    * port .........: port number to connect to.
     * env ..........: environment variables. SSL factory will use, if passed,
                       SSL_CERTFILE and SSL_VALIDATE variables.
     * config_file ..: path to cqlsh config file (usually ~/.cqlshrc).
@@ -52,6 +52,17 @@ def ssl_transport_factory(host, port, env, config_file):
         ssl_validate = get_option('ssl', 'validate')
     ssl_validate = ssl_validate is None or ssl_validate.lower() != 'false'
 
+    ssl_version_str = env.get('SSL_VERSION')
+    if ssl_version_str is None:
+        ssl_version_str = get_option('ssl', 'version')
+    if ssl_version_str is None:
+        ssl_version_str = "TLSv1"
+
+    ssl_version = getattr(ssl, "PROTOCOL_%s" % ssl_version_str, None)
+    if ssl_version is None:
+        sys.exit("%s is not a valid SSL protocol, please use one of SSLv23, "
+                 "TLSv1, TLSv1.1, or TLSv1.2" % (ssl_version_str,))
+
     ssl_certfile = env.get('SSL_CERTFILE')
     if ssl_certfile is None:
         ssl_certfile = get_option('certfiles', host)
@@ -65,6 +76,14 @@ def ssl_transport_factory(host, port, env, config_file):
     if not ssl_certfile is None:
         ssl_certfile = os.path.expanduser(ssl_certfile)
 
-    tsocket = TSSLSocket.TSSLSocket(host, port, ca_certs=ssl_certfile,
-                                    validate=ssl_validate)
-    return TTransport.TFramedTransport(tsocket)
+    userkey = get_option('ssl', 'userkey')
+    if userkey:
+        userkey = os.path.expanduser(userkey)
+    usercert = get_option('ssl', 'usercert')
+    if usercert:
+        usercert = os.path.expanduser(usercert)
+
+    return dict(ca_certs=ssl_certfile,
+                cert_reqs=ssl.CERT_REQUIRED if ssl_validate else ssl.CERT_NONE,
+                ssl_version=ssl_version,
+                keyfile=userkey, certfile=usercert)
