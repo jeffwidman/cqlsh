@@ -14,7 +14,7 @@ doclines = __doc__.split("\n")
 
 setup(
     name='cqlsh',
-    version='5.0.1',
+    version='5.0.2',
     description=doclines[0],
     long_description='\n'.join(doclines[2:]),
     keywords='python cql cassandra cqlsh',
@@ -23,7 +23,7 @@ setup(
     url='http://git-wip-us.apache.org/repos/asf/cassandra.git',
     platforms=['any'],
     license="http://www.apache.org/licenses/LICENSE-2.0",
-    install_requires=['cql', 'simplejson', 'unittest2'],
+    install_requires=['cql', 'simplejson', 'unittest2', 'cassandra-driver'],
     packages=['cqlshlib'],
     scripts = [
         'cqlsh',
