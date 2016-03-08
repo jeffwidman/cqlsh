@@ -13,3 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from .cassconnect import create_test_db, remove_test_db
+
+setUp = create_test_db
+tearDown = remove_test_db

@@ -14,7 +14,7 @@ doclines = __doc__.split("\n")
 
 setup(
     name='cqlsh',
-    version='5.0.2',
+    version='5.0.3',
     description=doclines[0],
     long_description='\n'.join(doclines[2:]),
     keywords='python cql cassandra cqlsh',

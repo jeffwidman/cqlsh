@@ -13,3 +13,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# to configure behavior, define $CQL_TEST_HOST to the destination address
+# for Thrift connections, and $CQL_TEST_PORT to the associated port.
+
+from .basecase import BaseTestCase, cqlsh
+
+class TestCqlshCommands(BaseTestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_show(self):
+        pass
+
+    def test_describe(self):
+        pass
+
+    def test_exit(self):
+        pass
+
+    def test_help(self):
+        pass
