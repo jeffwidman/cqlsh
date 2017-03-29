@@ -14,12 +14,12 @@ doclines = __doc__.split("\n")
 
 setup(
     name='cqlsh',
-    version='5.0.3',
+    version='5.0.4',
     description=doclines[0],
     long_description='\n'.join(doclines[2:]),
     keywords='python cql cassandra cqlsh',
-    maintainer='Andrew Mussey',
-    maintainer_email='admin@ajama.org',
+    maintainer='Spiro Sideris',
+    maintainer_email='spirosideris@gmail.com',
     url='http://git-wip-us.apache.org/repos/asf/cassandra.git',
     platforms=['any'],
     license="http://www.apache.org/licenses/LICENSE-2.0",
