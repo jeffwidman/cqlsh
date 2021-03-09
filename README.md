@@ -1,9 +1,26 @@
-# cqlsh
+# `cqlsh`
 
-### Note: This is a mirror of cqlsh from the official [Cassandra repo](http://git-wip-us.apache.org/repos/asf/cassandra.git).
+`cqlsh` is a Python-based command-line client for running `CQL` commands on a `cassandra` cluster.
 
-If you would like to contribute to cqlsh, [find out more information here](http://wiki.apache.org/cassandra/HowToContribute).
+Normally it's packaged as part of the full Apache Cassandra™ installation. This repo repackages it into a standalone Python package for lighter-weight installs.
 
-`cqlsh` is a Python-based command-line client for running CQL commands on a Cassandra cluster.  This script and the associated libraries come bundled with Apache's Cassandra installer.  This repo is a re-bundled version that allows for `cqlsh` to be used on a machine separate from that running Cassandra or from inside a virtual environment.
+### Installing:
 
-Documentation is available in the [Apache Cassandra(TM) 2.0 documentation](http://www.datastax.com/documentation/cassandra/2.0/webhelp/index.html#cassandra/gettingStartedCassandraIntro.html).
+Install and update using [`pip`](https://pip.pypa.io/en/stable/quickstart/):
+```
+$ pip install -U cqlsh
+```
+
+### Running:
+
+```
+$ cqlsh --help
+```
+
+### Documentation:
+
+Documentation is available as part of the official [Apache Cassandra™ documentation](https://cassandra.apache.org/doc/latest/tools/cqlsh.html).
+
+### Contributing:
+
+Because this is a repackaging of `cqlsh` from the official [Cassandra repo](https://gitbox.apache.org/repos/asf/cassandra.git), **only issues / PRs related to PyPI packaging should be opened against this repo**. If you would like to contribute to `cqlsh` itself, [find out more information here](http://wiki.apache.org/cassandra/HowToContribute).
