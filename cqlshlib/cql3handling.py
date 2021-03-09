@@ -18,8 +18,8 @@ from .cqlhandling import CqlParsingRuleSet, Hint
 from cassandra.metadata import maybe_escape_name
 
 
-simple_cql_types = set(('ascii', 'bigint', 'blob', 'boolean', 'counter', 'date', 'decimal', 'double', 'float', 'inet', 'int',
-                        'smallint', 'text', 'time', 'timestamp', 'timeuuid', 'tinyint', 'uuid', 'varchar', 'varint'))
+simple_cql_types = set(('ascii', 'bigint', 'blob', 'boolean', 'counter', 'date', 'decimal', 'double', 'duration', 'float',
+                        'inet', 'int', 'smallint', 'text', 'time', 'timestamp', 'timeuuid', 'tinyint', 'uuid', 'varchar', 'varint'))
 simple_cql_types.difference_update(('set', 'map', 'list'))
 
 from . import helptopics
@@ -33,6 +33,7 @@ class UnexpectedTableStructure(UserWarning):
 
     def __str__(self):
         return 'Unexpected table structure; may not translate correctly to CQL. ' + self.msg
+
 
 SYSTEM_KEYSPACES = ('system', 'system_schema', 'system_traces', 'system_auth', 'system_distributed')
 NONALTERBALE_KEYSPACES = ('system', 'system_schema')
@@ -51,6 +52,7 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
         ('default_time_to_live', None),
         ('speculative_retry', None),
         ('memtable_flush_period_in_ms', None),
+        ('cdc', None)
     )
 
     columnfamily_layout_map_options = (
@@ -90,6 +92,12 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
             return str(value)
         return "'%s'" % value.replace("'", "''")
 
+    @classmethod
+    def escape_name(cls, name):
+        if name is None:
+            return 'NULL'
+        return "'%s'" % name.replace("'", "''")
+
     @staticmethod
     def dequote_name(name):
         name = name.strip()
@@ -108,6 +116,7 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
         if cqlword[0] == "'" and cqlword[-1] == "'":
             cqlword = cqlword[1:-1].replace("''", "'")
         return cqlword
+
 
 CqlRuleSet = Cql3ParsingRuleSet()
 
@@ -135,7 +144,7 @@ JUNK ::= /([ \t\r\f\v]+|(--|[/][/])[^\n\r]*([\n\r]|$)|[/][*].*?[*][/])/ ;
 <stringLiteral> ::= <quotedStringLiteral>
                   | <pgStringLiteral> ;
 <quotedStringLiteral> ::= /'([^']|'')*'/ ;
-<pgStringLiteral> ::= /\$\$(?:(?!\$\$)|[^$])*\$\$/;
+<pgStringLiteral> ::= /\$\$(?:(?!\$\$).)*\$\$/;
 <quotedName> ::=    /"([^"]|"")*"/ ;
 <float> ::=         /-?[0-9]+\.[0-9]+/ ;
 <uuid> ::=          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/ ;
@@ -154,7 +163,7 @@ JUNK ::= /([ \t\r\f\v]+|(--|[/][/])[^\n\r]*([\n\r]|$)|[/][*].*?[*][/])/ ;
             | "false"
             ;
 
-<unclosedPgString>::= /\$\$(?:(?!\$\$)|[^$])*/ ;
+<unclosedPgString>::= /\$\$(?:(?!\$\$).)*/ ;
 <unclosedString>  ::= /'([^']|'')*/ ;
 <unclosedName>    ::= /"([^"]|"")*/ ;
 <unclosedComment> ::= /[/][*].*$/ ;
@@ -342,6 +351,7 @@ def prop_equals_completer(ctxt, cass):
             return ()
     return ['=']
 
+
 completer_for('property', 'propeq')(prop_equals_completer)
 
 
@@ -451,8 +461,7 @@ def ks_prop_val_mapender_completer(ctxt, cass):
 
 
 def cf_prop_name_completer(ctxt, cass):
-    return [c[0] for c in (CqlRuleSet.columnfamily_layout_options +
-                           CqlRuleSet.columnfamily_layout_map_options)]
+    return [c[0] for c in (CqlRuleSet.columnfamily_layout_options + CqlRuleSet.columnfamily_layout_map_options)]
 
 
 def cf_prop_val_completer(ctxt, cass):
@@ -472,6 +481,8 @@ def cf_prop_val_completer(ctxt, cass):
     if this_opt in ('min_compaction_threshold', 'max_compaction_threshold',
                     'gc_grace_seconds', 'min_index_interval', 'max_index_interval'):
         return [Hint('<integer>')]
+    if this_opt in ('cdc'):
+        return [Hint('<true|false>')]
     return [Hint('<option_value>')]
 
 
@@ -503,12 +514,20 @@ def cf_prop_val_mapkey_completer(ctxt, cass):
             opts.add('bucket_low')
         elif csc == 'LeveledCompactionStrategy':
             opts.add('sstable_size_in_mb')
+            opts.add('fanout_size')
         elif csc == 'DateTieredCompactionStrategy':
             opts.add('base_time_seconds')
             opts.add('max_sstable_age_days')
             opts.add('min_threshold')
             opts.add('max_window_size_seconds')
             opts.add('timestamp_resolution')
+        elif csc == 'TimeWindowCompactionStrategy':
+            opts.add('compaction_window_unit')
+            opts.add('compaction_window_size')
+            opts.add('min_threshold')
+            opts.add('max_threshold')
+            opts.add('timestamp_resolution')
+
         return map(escape_value, opts)
     return ()
 
@@ -552,19 +571,20 @@ def ks_name_completer(ctxt, cass):
 
 
 @completer_for('nonSystemKeyspaceName', 'ksname')
-def ks_name_completer(ctxt, cass):
+def non_system_ks_name_completer(ctxt, cass):
     ksnames = [n for n in cass.get_keyspace_names() if n not in SYSTEM_KEYSPACES]
     return map(maybe_escape_name, ksnames)
 
 
 @completer_for('alterableKeyspaceName', 'ksname')
-def ks_name_completer(ctxt, cass):
+def alterable_ks_name_completer(ctxt, cass):
     ksnames = [n for n in cass.get_keyspace_names() if n not in NONALTERBALE_KEYSPACES]
     return map(maybe_escape_name, ksnames)
 
 
 def cf_ks_name_completer(ctxt, cass):
     return [maybe_escape_name(ks) + '.' for ks in cass.get_keyspace_names()]
+
 
 completer_for('columnFamilyName', 'ksname')(cf_ks_name_completer)
 completer_for('materializedViewName', 'ksname')(cf_ks_name_completer)
@@ -575,6 +595,7 @@ def cf_ks_dot_completer(ctxt, cass):
     if name in cass.get_keyspace_names():
         return ['.']
     return []
+
 
 completer_for('columnFamilyName', 'dot')(cf_ks_dot_completer)
 completer_for('materializedViewName', 'dot')(cf_ks_dot_completer)
@@ -606,6 +627,7 @@ def mv_name_completer(ctxt, cass):
             return ()
         raise
     return map(maybe_escape_name, mvnames)
+
 
 completer_for('userTypeName', 'ksname')(cf_ks_name_completer)
 
@@ -659,13 +681,16 @@ def working_on_keyspace(ctxt):
         return True
     return False
 
+
 syntax_rules += r'''
 <useStatement> ::= "USE" <keyspaceName>
                  ;
 <selectStatement> ::= "SELECT" ( "JSON" )? <selectClause>
                         "FROM" (cf=<columnFamilyName> | mv=<materializedViewName>)
                           ( "WHERE" <whereClause> )?
+                          ( "GROUP" "BY" <groupByClause> ( "," <groupByClause> )* )?
                           ( "ORDER" "BY" <orderByClause> ( "," <orderByClause> )* )?
+                          ( "PER" "PARTITION" "LIMIT" perPartitionLimit=<wholenumber> )?
                           ( "LIMIT" limit=<wholenumber> )?
                           ( "ALLOW" "FILTERING" )?
                     ;
@@ -689,10 +714,13 @@ syntax_rules += r'''
              | "COUNT" "(" star=( "*" | "1" ) ")"
              | "CAST" "(" <selector> "AS" <storageType> ")"
              | <functionName> <selectionFunctionArguments>
+             | <term>
              ;
 <selectionFunctionArguments> ::= "(" ( <selector> ( "," <selector> )* )? ")"
                           ;
 <orderByClause> ::= [ordercol]=<cident> ( "ASC" | "DESC" )?
+                  ;
+<groupByClause> ::= [groupcol]=<cident>
                   ;
 '''
 
@@ -774,6 +802,16 @@ def select_order_column_completer(ctxt, cass):
     return [Hint('No more orderable columns here.')]
 
 
+@completer_for('groupByClause', 'groupcol')
+def select_group_column_completer(ctxt, cass):
+    prev_group_cols = ctxt.get_binding('groupcol', ())
+    layout = get_table_meta(ctxt, cass)
+    group_by_candidates = [col.name for col in layout.primary_key]
+    if len(group_by_candidates) > len(prev_group_cols):
+        return [maybe_escape_name(group_by_candidates[len(prev_group_cols)])]
+    return [Hint('No more columns here.')]
+
+
 @completer_for('relation', 'token')
 def relation_token_word_completer(ctxt, cass):
     return ['TOKEN(']
@@ -804,6 +842,7 @@ def select_relation_lhs_completer(ctxt, cass):
         filterable.add(idx.index_options["target"])
     return map(maybe_escape_name, filterable)
 
+
 explain_completion('selector', 'colname')
 
 syntax_rules += r'''
@@ -824,9 +863,9 @@ syntax_rules += r'''
 def regular_column_names(table_meta):
     if not table_meta or not table_meta.columns:
         return []
-    regular_columns = list(set(table_meta.columns.keys()) -
-                           set([key.name for key in table_meta.partition_key]) -
-                           set([key.name for key in table_meta.clustering_key]))
+    regular_columns = list(set(table_meta.columns.keys())
+                           - set([key.name for key in table_meta.partition_key])
+                           - set([key.name for key in table_meta.clustering_key]))
     return regular_columns
 
 
@@ -864,7 +903,6 @@ def insert_newval_completer(ctxt, cass):
 
 @completer_for('insertStatement', 'valcomma')
 def insert_valcomma_completer(ctxt, cass):
-    layout = get_table_meta(ctxt, cass)
     numcols = len(ctxt.get_binding('colname', ()))
     numvals = len(ctxt.get_binding('newval', ()))
     if numcols > numvals:
@@ -879,6 +917,7 @@ def insert_option_completer(ctxt, cass):
         opts.discard(opt.split()[0])
     return opts
 
+
 syntax_rules += r'''
 <updateStatement> ::= "UPDATE" cf=<columnFamilyName>
                         ( "USING" [updateopt]=<usingOption>
@@ -888,21 +927,27 @@ syntax_rules += r'''
                         ( "IF" ( "EXISTS" | <conditions> ))?
                     ;
 <assignment> ::= updatecol=<cident>
-                    ( "=" update_rhs=( <term> | <cident> )
+                    (( "=" update_rhs=( <term> | <cident> )
                                 ( counterop=( "+" | "-" ) inc=<wholenumber>
-                                | listadder="+" listcol=<cident> )?
-                    | indexbracket="[" <term> "]" "=" <term> )
+                                | listadder="+" listcol=<cident> )? )
+                    | ( indexbracket="[" <term> "]" "=" <term> )
+                    | ( udt_field_dot="." udt_field=<identifier> "=" <term> ))
                ;
 <conditions> ::=  <condition> ( "AND" <condition> )*
                ;
-<condition> ::= <cident> ( "[" <term> "]" )? (("=" | "<" | ">" | "<=" | ">=" | "!=") <term>
-                                             | "IN" "(" <term> ( "," <term> )* ")")
+<condition_op_and_rhs> ::= (("=" | "<" | ">" | "<=" | ">=" | "!=") <term>)
+                           | ("IN" "(" <term> ( "," <term> )* ")" )
+                         ;
+<condition> ::= conditioncol=<cident>
+                    ( (( indexbracket="[" <term> "]" )
+                      |( udt_field_dot="." udt_field=<identifier> )) )?
+                    <condition_op_and_rhs>
               ;
 '''
 
 
 @completer_for('updateStatement', 'updateopt')
-def insert_option_completer(ctxt, cass):
+def update_option_completer(ctxt, cass):
     opts = set('TIMESTAMP TTL'.split())
     for opt in ctxt.get_binding('updateopt', ()):
         opts.discard(opt.split()[0])
@@ -971,6 +1016,62 @@ def update_indexbracket_completer(ctxt, cass):
         return ['[']
     return []
 
+
+@completer_for('assignment', 'udt_field_dot')
+def update_udt_field_dot_completer(ctxt, cass):
+    layout = get_table_meta(ctxt, cass)
+    curcol = dequote_name(ctxt.get_binding('updatecol', ''))
+    return ["."] if _is_usertype(layout, curcol) else []
+
+
+@completer_for('assignment', 'udt_field')
+def assignment_udt_field_completer(ctxt, cass):
+    layout = get_table_meta(ctxt, cass)
+    curcol = dequote_name(ctxt.get_binding('updatecol', ''))
+    return _usertype_fields(ctxt, cass, layout, curcol)
+
+
+def _is_usertype(layout, curcol):
+    coltype = layout.columns[curcol].cql_type
+    return coltype not in simple_cql_types and coltype not in ('map', 'set', 'list')
+
+
+def _usertype_fields(ctxt, cass, layout, curcol):
+    if not _is_usertype(layout, curcol):
+        return []
+
+    coltype = layout.columns[curcol].cql_type
+    ks = ctxt.get_binding('ksname', None)
+    if ks is not None:
+        ks = dequote_name(ks)
+    user_type = cass.get_usertype_layout(ks, coltype)
+    return [field_name for (field_name, field_type) in user_type]
+
+
+@completer_for('condition', 'indexbracket')
+def condition_indexbracket_completer(ctxt, cass):
+    layout = get_table_meta(ctxt, cass)
+    curcol = dequote_name(ctxt.get_binding('conditioncol', ''))
+    coltype = layout.columns[curcol].cql_type
+    if coltype in ('map', 'list'):
+        return ['[']
+    return []
+
+
+@completer_for('condition', 'udt_field_dot')
+def condition_udt_field_dot_completer(ctxt, cass):
+    layout = get_table_meta(ctxt, cass)
+    curcol = dequote_name(ctxt.get_binding('conditioncol', ''))
+    return ["."] if _is_usertype(layout, curcol) else []
+
+
+@completer_for('condition', 'udt_field')
+def condition_udt_field_completer(ctxt, cass):
+    layout = get_table_meta(ctxt, cass)
+    curcol = dequote_name(ctxt.get_binding('conditioncol', ''))
+    return _usertype_fields(ctxt, cass, layout, curcol)
+
+
 syntax_rules += r'''
 <deleteStatement> ::= "DELETE" ( <deleteSelector> ( "," <deleteSelector> )* )?
                         "FROM" cf=<columnFamilyName>
@@ -978,7 +1079,9 @@ syntax_rules += r'''
                         "WHERE" <whereClause>
                         ( "IF" ( "EXISTS" | <conditions> ) )?
                     ;
-<deleteSelector> ::= delcol=<cident> ( memberbracket="[" memberselector=<term> "]" )?
+<deleteSelector> ::= delcol=<cident>
+                     ( ( "[" <term> "]" )
+                     | ( "." <identifier> ) )?
                    ;
 <deleteOption> ::= "TIMESTAMP" <wholenumber>
                  ;
@@ -997,6 +1100,7 @@ def delete_opt_completer(ctxt, cass):
 def delete_delcol_completer(ctxt, cass):
     layout = get_table_meta(ctxt, cass)
     return map(maybe_escape_name, regular_column_names(layout))
+
 
 syntax_rules += r'''
 <batchStatement> ::= "BEGIN" ( "UNLOGGED" | "COUNTER" )? "BATCH"
@@ -1020,6 +1124,7 @@ def batch_opt_completer(ctxt, cass):
         opts.discard(opt.split()[0])
     return opts
 
+
 syntax_rules += r'''
 <truncateStatement> ::= "TRUNCATE" ("COLUMNFAMILY" | "TABLE")? cf=<columnFamilyName>
                       ;
@@ -1039,6 +1144,7 @@ def create_ks_wat_completer(ctxt, cass):
         return ['KEYSPACE']
     return ['KEYSPACE', 'SCHEMA']
 
+
 syntax_rules += r'''
 <createColumnFamilyStatement> ::= "CREATE" wat=( "COLUMNFAMILY" | "TABLE" ) ("IF" "NOT" "EXISTS")?
                                     ( ks=<nonSystemKeyspaceName> dot="." )? cf=<cfOrKsName>
@@ -1047,7 +1153,7 @@ syntax_rules += r'''
                                 ;
 
 <cfamProperty> ::= <property>
-                 | "COMPACT" "STORAGE"
+                 | "COMPACT" "STORAGE" "CDC"
                  | "CLUSTERING" "ORDER" "BY" "(" <cfamOrdering>
                                                  ( "," <cfamOrdering> )* ")"
                  ;
@@ -1086,6 +1192,7 @@ def create_cf_wat_completer(ctxt, cass):
     if ctxt.get_binding('partial', '') == '':
         return ['TABLE']
     return ['TABLE', 'COLUMNFAMILY']
+
 
 explain_completion('createColumnFamilyStatement', 'cf', '<new_table_name>')
 explain_completion('compositeKeyCfSpec', 'newcolname', '<new_column_name>')
@@ -1140,6 +1247,7 @@ def create_cf_composite_primary_key_comma_completer(ctxt, cass):
     if len(pieces_already) >= len(cols_declared) - 1:
         return ()
     return [',']
+
 
 syntax_rules += r'''
 
@@ -1204,6 +1312,7 @@ def create_index_col_completer(ctxt, cass):
     colnames = [cd.name for cd in layout.columns.values() if cd.name not in idx_targets]
     return map(maybe_escape_name, colnames)
 
+
 syntax_rules += r'''
 <dropKeyspaceStatement> ::= "DROP" "KEYSPACE" ("IF" "EXISTS")? ksname=<nonSystemKeyspaceName>
                           ;
@@ -1261,12 +1370,12 @@ def idx_ks_idx_name_completer(ctxt, cass):
         raise
     return map(maybe_escape_name, idxnames)
 
+
 syntax_rules += r'''
 <alterTableStatement> ::= "ALTER" wat=( "COLUMNFAMILY" | "TABLE" ) cf=<columnFamilyName>
                                <alterInstructions>
                         ;
-<alterInstructions> ::= "ALTER" existcol=<cident> "TYPE" <storageType>
-                      | "ADD" newcol=<cident> <storageType> ("static")?
+<alterInstructions> ::= "ADD" newcol=<cident> <storageType> ("static")?
                       | "DROP" existcol=<cident>
                       | "WITH" <cfamProperty> ( "AND" <cfamProperty> )*
                       | "RENAME" existcol=<cident> "TO" newcol=<cident>
@@ -1276,8 +1385,7 @@ syntax_rules += r'''
 <alterUserTypeStatement> ::= "ALTER" "TYPE" ut=<userTypeName>
                                <alterTypeInstructions>
                              ;
-<alterTypeInstructions> ::= "ALTER" existcol=<cident> "TYPE" <storageType>
-                           | "ADD" newcol=<cident> <storageType>
+<alterTypeInstructions> ::= "ADD" newcol=<cident> <storageType>
                            | "RENAME" existcol=<cident> "TO" newcol=<cident>
                               ( "AND" existcol=<cident> "TO" newcol=<cident> )*
                            ;
@@ -1296,6 +1404,7 @@ def alter_type_field_completer(ctxt, cass):
     layout = get_ut_layout(ctxt, cass)
     fields = [tuple[0] for tuple in layout]
     return map(maybe_escape_name, fields)
+
 
 explain_completion('alterInstructions', 'newcol', '<new_column_name>')
 explain_completion('alterTypeInstructions', 'newcol', '<new_field_name>')
@@ -1390,6 +1499,7 @@ syntax_rules += r'''
 <resource> ::= <dataResource>
              | <roleResource>
              | <functionResource>
+             | <jmxResource>
              ;
 
 <dataResource> ::= ( "ALL" "KEYSPACES" )
@@ -1408,6 +1518,11 @@ syntax_rules += r'''
                            ")" )
                        )
                      ;
+
+<jmxResource> ::= ( "ALL" "MBEANS")
+                | ( ( "MBEAN" | "MBEANS" ) <stringLiteral> )
+                ;
+
 '''
 
 
@@ -1440,6 +1555,7 @@ def rolename_completer(ctxt, cass):
     session = cass.session
     return [maybe_quote(row[0].replace("'", "''")) for row in session.execute("LIST ROLES")]
 
+
 syntax_rules += r'''
 <createTriggerStatement> ::= "CREATE" "TRIGGER" ( "IF" "NOT" "EXISTS" )? <cident>
                                "ON" cf=<columnFamilyName> "USING" class=<stringLiteral>
@@ -1459,9 +1575,10 @@ def get_trigger_names(ctxt, cass):
 
 
 @completer_for('dropTriggerStatement', 'triggername')
-def alter_type_field_completer(ctxt, cass):
+def drop_trigger_completer(ctxt, cass):
     names = get_trigger_names(ctxt, cass)
     return map(maybe_escape_name, names)
+
 
 # END SYNTAX/COMPLETION RULE DEFINITIONS
 
