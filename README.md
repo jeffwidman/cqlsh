@@ -25,4 +25,35 @@ Documentation is available as part of the official [Apache Cassandra™ document
 
 Because this is a repackaging of `cqlsh` from the official [Cassandra repo](https://gitbox.apache.org/repos/asf/cassandra.git), **only issues / PRs related to PyPI packaging should be opened against this repo**. If you would like to contribute to `cqlsh` itself, [find out more information here](http://wiki.apache.org/cassandra/HowToContribute).
 
-Currently maintained by [Jeff Widman](https://github.com/jeffwidman). Previous maintainers: [Spiro](https://github.com/spiside) and [Andrew Mussey](https://github.com/amussey).
+This PyPI package is maintained by [Jeff Widman](https://github.com/jeffwidman). Previous maintainers: [Spiro](https://github.com/spiside) and [Andrew Mussey](https://github.com/amussey).
+
+
+### Changelog:
+
+Unfortunately the Cassandra project does not always increment the `cqlsh` version number, so for every
+release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
+shipped.
+
+#### 5.0.4 (Mar 29, 2017)
+
+This packages `cqlsh` `5.0.1` from [Cassandra 3.4.0](https://github.com/apache/cassandra/blob/cassandra-3.4/bin/cqlsh.py).
+
+
+#### 5.0.3 (Mar 21, 2016)
+
+This packages `cqlsh` `5.0.1` from [Cassandra 2.2.0](https://github.com/apache/cassandra/blob/cassandra-2.2.0/bin/cqlsh.py).
+
+
+#### 4.1.1 (Feb 11, 2014)
+
+This packages `cqlsh` `4.1.1` from [Cassandra 2.0.5](https://github.com/apache/cassandra/blob/cassandra-2.0.5/bin/cqlsh).
+
+
+#### 4.1.0 (Dec 2, 2013)
+
+This packages `cqlsh` `4.1.0` from [Cassandra 2.0.3](https://github.com/apache/cassandra/blob/cassandra-2.0.3/bin/cqlsh).
+
+
+#### 4.0.1 (Oct 14, 2013)
+
+This packages `cqlsh` `4.0.1` from [Cassandra 2.0.1](https://github.com/apache/cassandra/blob/cassandra-2.0.1/bin/cqlsh).
