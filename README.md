@@ -40,7 +40,7 @@ This packages `cqlsh` `5.0.1` from [Cassandra 4.0-beta4](https://github.com/apac
 * Now supports Python 3.
 * Although this is pulled from a Cassandra `4.x` release, it should generally work against Cassandra `3.x` clusters without needing to set any flags. Upcoming releases will need to set the `--cqlversion` flag when talking with clusters < `4.0` due to this [commit](https://github.com/apache/cassandra/commit/c9d6c725dd0b4aa5693eb1c6d2221c28e9e99c6e#diff-9e4fe0cfd28004625a8006be8a0bdeab8cbdfb039449fb9501b15e8952577aaaL479). See also [CASSANDRA-16508](https://issues.apache.org/jira/browse/CASSANDRA-16508).
 
-#### 5.0.5 (Mar 9, 2022)
+#### 5.0.5 (Mar 9, 2021)
 
 This packages `cqlsh` `5.0.1` from [Cassandra 3.11.10](https://github.com/apache/cassandra/blob/cassandra-3.11.10/bin/cqlsh.py).
 
