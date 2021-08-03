@@ -51,7 +51,7 @@ from six.moves.queue import Queue
 
 from cassandra import OperationTimedOut
 from cassandra.cluster import Cluster, DefaultConnection
-from cassandra.cqltypes import ReversedType, UserType, BytesType
+from cassandra.cqltypes import ReversedType, UserType, BytesType, VarcharType
 from cassandra.metadata import protect_name, protect_names, protect_value
 from cassandra.policies import RetryPolicy, WhiteListRoundRobinPolicy, DCAwareRoundRobinPolicy, FallthroughRetryPolicy
 from cassandra.query import BatchStatement, BatchType, SimpleStatement, tuple_factory
@@ -560,7 +560,7 @@ class ExportWriter(object):
 
         if self.header:
             writer = csv.writer(self.current_dest.output, **self.options.dialect)
-            writer.writerow(self.columns)
+            writer.writerow([ensure_str(c) for c in self.columns])
 
         return True
 
@@ -1254,7 +1254,7 @@ class ImportTask(CopyTask):
             attempts -= 1
 
         self.printmsg("\n%d rows imported from %d files in %s (%d skipped)." %
-                      (self.receive_meter.get_total_records(),
+                      (self.receive_meter.get_total_records() - self.error_handler.num_rows_failed,
                        self.feeding_result.num_sources if self.feeding_result else 0,
                        self.describe_interval(time.time() - self.time_start),
                        self.feeding_result.skip_rows if self.feeding_result else 0))
@@ -1723,7 +1723,6 @@ class ExportProcess(ChildProcess):
             writer = csv.writer(output, **self.options.dialect)
 
             for row in rows:
-                print("cqlshlib.copyutil.ExportProcess.write_rows_to_csv(): writing row")
                 writer.writerow(list(map(self.format_value, row, cql_types)))
 
             data = (output.getvalue(), len(rows))
@@ -1913,7 +1912,9 @@ class ImportConversion(object):
 
         def convert_mandatory(t, v):
             v = unprotect(v)
-            if v == self.nullval:
+            # we can't distinguish between empty strings and null values in csv. Null values are not supported in
+            # collections, so it must be an empty string.
+            if v == self.nullval and not issubclass(t, VarcharType):
                 raise ParseError('Empty values are not allowed')
             return converters.get(t.typename, convert_unknown)(v, ct=t)
 
@@ -2031,7 +2032,7 @@ class ImportConversion(object):
                     raise ValueError("can't interpret %r as a date with format %s or as int" % (val,
                                                                                                 self.date_time_format))
 
-            # https://docs.python.org/2/library/time.html#time.struct_time
+            # https://docs.python.org/3/library/time.html#time.struct_time
             tval = time.struct_time((int(m.group(1)), int(m.group(2)), int(m.group(3)),  # year, month, day
                                     int(m.group(4)) if m.group(4) else 0,  # hour
                                     int(m.group(5)) if m.group(5) else 0,  # minute
