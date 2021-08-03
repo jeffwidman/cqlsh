@@ -25,6 +25,27 @@ Documentation is available as part of the official [Apache Cassandra™ document
 
 Because this is a repackaging of `cqlsh` from the official [Cassandra repo](https://gitbox.apache.org/repos/asf/cassandra.git), **only issues / PRs related to PyPI packaging should be opened against this repo**. If you would like to contribute to `cqlsh` itself, [find out more information here](https://github.com/apache/cassandra/blob/trunk/CONTRIBUTING.md).
 
+Steps to sanity check that the packaging works as expected:
+
+1. Install `cqlsh` locally (probably in a `virtualenv`):
+```
+$ pip install . -e  # run from within the cqlsh directory
+```
+2. Start a local copy of Cassandra:
+```
+$ docker pull cassandra
+$ docker run -it --rm -p 9042:9042 cassandra
+```
+3. Verify `cqlsh` successfully connects to the server:
+```
+$ cqlsh
+
+Connected to Test Cluster at 127.0.0.1:9042
+[cqlsh 6.0.0 | Cassandra 4.0.0 | CQL spec 3.4.5 | Native protocol v5]
+Use HELP for help.
+cqlsh>
+```
+
 This PyPI package is maintained by [Jeff Widman](https://github.com/jeffwidman). Previous maintainers: [Spiro](https://github.com/spiside) and [Andrew Mussey](https://github.com/amussey).
 
 
