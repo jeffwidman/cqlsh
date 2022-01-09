@@ -4,6 +4,7 @@ from setuptools import setup
 setup(
     name="cqlsh",
     install_requires=[
+        "cql",
         "cassandra-driver",
         "six",
     ],
