@@ -1,3 +1,7 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Downloads](https://pepy.tech/badge/cqlsh)](https://pepy.tech/project/cqlsh)
+[![PyPI version](https://badge.fury.io/py/cqlsh.svg)](https://badge.fury.io/py/cqlsh)
+
 # `cqlsh`
 
 `cqlsh` is a Python-based command-line client for running `CQL` commands on a `cassandra` cluster.
