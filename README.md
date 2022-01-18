@@ -59,6 +59,12 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
+#### 6.0.1 (Jan 18, 2022)
+
+The actual source code is identical to the `cqlsh` `6.0.0` release, except it's now packaged as
+a module. This allows it to be used as a library, not just an executable script. It also provides
+better Windows support. Details in https://github.com/jeffwidman/cqlsh/pull/7 by @bshcoening.
+
 #### 6.0.0 (Aug 3, 2021)
 
 This packages `cqlsh` `6.0.0` from [Cassandra 4.0](https://github.com/apache/cassandra/blob/cassandra-4.0.0/bin/cqlsh.py):
