@@ -33,7 +33,7 @@ Steps to sanity check that the packaging works as expected:
 
 1. Install `cqlsh` locally (probably in a `virtualenv`):
 ```
-$ pip install . -e  # run from within the cqlsh directory
+$ pip install -e .  # run from within the cqlsh directory
 ```
 2. Start a local copy of Cassandra:
 ```
