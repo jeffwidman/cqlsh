@@ -63,7 +63,7 @@ shipped.
 
 The actual source code is identical to the `cqlsh` `6.0.0` release, except it's now packaged as
 a module. This allows it to be used as a library, not just an executable script. It also provides
-better Windows support. Details in https://github.com/jeffwidman/cqlsh/pull/7 by @bshcoening.
+better Windows support. Details in https://github.com/jeffwidman/cqlsh/pull/7 by @bschoening.
 
 #### 6.0.0 (Aug 3, 2021)
 
