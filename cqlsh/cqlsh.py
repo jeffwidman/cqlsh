@@ -171,7 +171,7 @@ DEFAULT_PORT = 9042
 DEFAULT_SSL = False
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 5
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 10
-
+DEFAULT_CONSISTENCY = 1
 DEFAULT_FLOAT_PRECISION = 5
 DEFAULT_DOUBLE_PRECISION = 5
 DEFAULT_MAX_TRACE_WAIT = 10
@@ -436,6 +436,7 @@ class Shell(cmd.Cmd):
                  request_timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
                  protocol_version=None,
                  connect_timeout=DEFAULT_CONNECT_TIMEOUT_SECONDS,
+                 consistency=DEFAULT_CONSISTENCY,
                  is_subshell=False):
         cmd.Cmd.__init__(self, completekey=completekey)
         self.hostname = hostname
@@ -487,7 +488,7 @@ class Shell(cmd.Cmd):
 
         self.session.default_timeout = request_timeout
         self.session.row_factory = ordered_dict_factory
-        self.session.default_consistency_level = cassandra.ConsistencyLevel.ONE
+        self.session.default_consistency_level = consistency
         self.get_connection_versions()
         self.set_expanded_cql_version(self.connection_versions['cql'])
 
@@ -519,7 +520,7 @@ class Shell(cmd.Cmd):
             self.show_line_nums = True
         self.stdin = stdin
         self.query_out = sys.stdout
-        self.consistency_level = cassandra.ConsistencyLevel.ONE
+        self.consistency_level = self.session.default_consistency_level
         self.serial_consistency_level = cassandra.ConsistencyLevel.SERIAL
 
         self.empty_lines = 0
@@ -2152,6 +2153,14 @@ def read_options(cmdlineargs, environment):
     optvalues.cqlversion = option_with_default(configs.get, 'cql', 'version', None)
     optvalues.connect_timeout = option_with_default(configs.getint, 'connection', 'timeout', DEFAULT_CONNECT_TIMEOUT_SECONDS)
     optvalues.request_timeout = option_with_default(configs.getint, 'connection', 'request_timeout', DEFAULT_REQUEST_TIMEOUT_SECONDS)
+
+    tval = option_with_default(configs.get, 'connection', 'default_consistency', cassandra.ConsistencyLevel.value_to_name[DEFAULT_CONSISTENCY])
+    try:
+	    optvalues.default_consistency = cassandra.ConsistencyLevel.name_to_value[tval]
+    except:
+	    print 'Could not set default consistency to %s.' % (tval)
+	    optvalues.default_consistency = DEFAULT_CONSISTENCY
+
     optvalues.execute = None
 
     (options, arguments) = parser.parse_args(cmdlineargs, values=optvalues)
@@ -2323,7 +2332,8 @@ def main(options, hostname, port):
                       single_statement=options.execute,
                       request_timeout=options.request_timeout,
                       connect_timeout=options.connect_timeout,
-                      encoding=options.encoding)
+                      encoding=options.encoding,
+                      consistency=options.default_consistency)
     except KeyboardInterrupt:
         sys.exit('Connection aborted.')
     except CQL_ERRORS as e:
