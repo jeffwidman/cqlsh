@@ -50,7 +50,7 @@ Use HELP for help.
 cqlsh>
 ```
 
-This PyPI package is maintained by [Jeff Widman](https://github.com/jeffwidman). Previous maintainers: [Spiro](https://github.com/spiside) and [Andrew Mussey](https://github.com/amussey).
+This PyPI package is maintained by [Jeff Widman](https://github.com/jeffwidman) and [Brad Schoening](https://github.com/bschoening). Previous maintainers: [Spiro](https://github.com/spiside) and [Andrew Mussey](https://github.com/amussey).
 
 
 ### Changelog:
