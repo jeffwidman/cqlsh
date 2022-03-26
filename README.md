@@ -59,6 +59,12 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
+#### 6.1.0 (Unreleased)
+
+This packages `cqlsh` `6.1.0` from [Cassandra 4.1](https://github.com/apache/cassandra/blob/cassandra-4.1.0/bin/cqlsh.py):
+* Requires Python 3.6+.
+* Although this is pulled from a Cassandra `4.x` release, it should generally work against Cassandra `3.x` clusters without needing to set any flags.
+
 #### 6.0.1 (Jan 18, 2022)
 
 The actual source code is identical to the `cqlsh` `6.0.0` release, except it's now packaged as
