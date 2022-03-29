@@ -65,6 +65,8 @@ The actual source code is identical to the `cqlsh` `6.0.0` release, except it's 
 a module. This allows it to be used as a library, not just an executable script. It also provides
 better Windows support. Details in https://github.com/jeffwidman/cqlsh/pull/7 by @bschoening.
 
+Note: This release was yanked from PyPI because it [broke Python 2 compatibility](https://github.com/jeffwidman/cqlsh/issues/11).
+
 #### 6.0.0 (Aug 3, 2021)
 
 This packages `cqlsh` `6.0.0` from [Cassandra 4.0](https://github.com/apache/cassandra/blob/cassandra-4.0.0/bin/cqlsh.py):
