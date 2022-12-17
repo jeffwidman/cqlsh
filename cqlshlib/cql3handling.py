@@ -18,8 +18,9 @@ from cassandra.metadata import maybe_escape_name
 from cqlshlib import helptopics
 from cqlshlib.cqlhandling import CqlParsingRuleSet, Hint
 
-simple_cql_types = set(('ascii', 'bigint', 'blob', 'boolean', 'counter', 'date', 'decimal', 'double', 'duration', 'float',
-                        'inet', 'int', 'smallint', 'text', 'time', 'timestamp', 'timeuuid', 'tinyint', 'uuid', 'varchar', 'varint'))
+simple_cql_types = {'ascii', 'bigint', 'blob', 'boolean', 'counter', 'date', 'decimal', 'double', 'duration', 'float',
+                    'inet', 'int', 'smallint', 'text', 'time', 'timestamp', 'timeuuid', 'tinyint', 'uuid', 'varchar',
+                    'varint'}
 simple_cql_types.difference_update(('set', 'map', 'list'))
 
 cqldocs = helptopics.CQL3HelpTopics()
@@ -34,7 +35,8 @@ class UnexpectedTableStructure(UserWarning):
         return 'Unexpected table structure; may not translate correctly to CQL. ' + self.msg
 
 
-SYSTEM_KEYSPACES = ('system', 'system_schema', 'system_traces', 'system_auth', 'system_distributed', 'system_views', 'system_virtual_schema')
+SYSTEM_KEYSPACES = ('system', 'system_schema', 'system_traces', 'system_auth', 'system_distributed', 'system_views',
+                    'system_virtual_schema')
 NONALTERBALE_KEYSPACES = ('system', 'system_schema', 'system_views', 'system_virtual_schema')
 
 
@@ -58,7 +60,8 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
         # (CQL3 option name, schema_columnfamilies column name (or None if same),
         #  list of known map keys)
         ('compaction', 'compaction_strategy_options',
-            ('class', 'max_threshold', 'tombstone_compaction_interval', 'tombstone_threshold', 'enabled', 'unchecked_tombstone_compaction', 'only_purge_repaired_tombstones', 'provide_overlapping_tombstones')),
+            ('class', 'max_threshold', 'tombstone_compaction_interval', 'tombstone_threshold', 'enabled',
+             'unchecked_tombstone_compaction', 'only_purge_repaired_tombstones', 'provide_overlapping_tombstones')),
         ('compression', 'compression_parameters',
             ('sstable_compression', 'chunk_length_kb', 'crc_check_chance')),
         ('caching', None,
@@ -385,6 +388,11 @@ completer_for('property', 'propeq')(prop_equals_completer)
 def prop_name_completer(ctxt, cass):
     if working_on_keyspace(ctxt):
         return ks_prop_name_completer(ctxt, cass)
+    elif 'MATERIALIZED' == ctxt.get_binding('wat', '').upper():
+        props = cf_prop_name_completer(ctxt, cass)
+        props.remove('default_time_to_live')
+        props.remove('gc_grace_seconds')
+        return props
     else:
         return cf_prop_name_completer(ctxt, cass)
 
@@ -450,7 +458,7 @@ def ks_prop_val_mapkey_completer(ctxt, cass):
     else:
         return ["'class'"]
     if repclass == 'SimpleStrategy':
-        opts = set(('replication_factor',))
+        opts = {'replication_factor'}
     elif repclass == 'NetworkTopologyStrategy':
         return [Hint('<dc_name>')]
     return list(map(escape_value, opts.difference(keysseen)))
@@ -694,7 +702,7 @@ def get_ut_layout(ctxt, cass):
 
 
 def working_on_keyspace(ctxt):
-    wat = ctxt.get_binding('wat').upper()
+    wat = ctxt.get_binding('wat', '').upper()
     if wat in ('KEYSPACE', 'SCHEMA'):
         return True
     return False
@@ -739,7 +747,13 @@ syntax_rules += r'''
 <orderByClause> ::= [ordercol]=<cident> ( "ASC" | "DESC" )?
                   ;
 <groupByClause> ::= [groupcol]=<cident>
+                  | <functionName><groupByFunctionArguments>
                   ;
+<groupByFunctionArguments> ::= "(" ( <groupByFunctionArgument> ( "," <groupByFunctionArgument> )* )? ")"
+                             ;
+<groupByFunctionArgument> ::= [groupcol]=<cident>
+                            | <term>
+                            ;
 '''
 
 
@@ -953,7 +967,7 @@ syntax_rules += r'''
                ;
 <conditions> ::=  <condition> ( "AND" <condition> )*
                ;
-<condition_op_and_rhs> ::= (("=" | "<" | ">" | "<=" | ">=" | "!=") <term>)
+<condition_op_and_rhs> ::= (("=" | "<" | ">" | "<=" | ">=" | "!=" | "CONTAINS" ( "KEY" )? ) <term>)
                            | ("IN" "(" <term> ( "," <term> )* ")" )
                          ;
 <condition> ::= conditioncol=<cident>
@@ -1282,9 +1296,16 @@ syntax_rules += r'''
                                ( "USING" <stringLiteral> ( "WITH" "OPTIONS" "=" <mapLiteral> )? )?
                          ;
 
-<createMaterializedViewStatement> ::= "CREATE" "MATERIALIZED" "VIEW" ("IF" "NOT" "EXISTS")? <materializedViewName>?
-                                      "AS" <selectStatement>
-                                      "PRIMARY" "KEY" <pkDef>
+
+<colList> ::= "(" <cident> ( "," <cident> )* ")"
+          ;
+
+<createMaterializedViewStatement> ::= "CREATE" wat="MATERIALIZED" "VIEW" ("IF" "NOT" "EXISTS")? viewname=<materializedViewName>?
+                                      "AS" "SELECT" <selectClause>
+                                      "FROM" cf=<columnFamilyName>
+                                      "WHERE" <cident> "IS" "NOT" "NULL" ( "AND" <cident> "IS" "NOT" "NULL")*
+                                      "PRIMARY" "KEY" (<colList> | ( "(" <colList> ( "," <cident> )* ")" ))
+                                      ( "WITH" <cfamProperty> ( "AND" <cfamProperty> )* )?
                                     ;
 
 <createUserTypeStatement> ::= "CREATE" "TYPE" ( ks=<nonSystemKeyspaceName> dot="." )? typename=<cfOrKsName> "(" newcol=<cident> <storageType>
@@ -1318,6 +1339,7 @@ syntax_rules += r'''
 '''
 
 explain_completion('createIndexStatement', 'indexname', '<new_index_name>')
+explain_completion('createMaterializedViewStatement', 'viewname', '<new_view_name>')
 explain_completion('createUserTypeStatement', 'typename', '<new_type_name>')
 explain_completion('createUserTypeStatement', 'newcol', '<new_field_name>')
 
@@ -1390,21 +1412,21 @@ def idx_ks_idx_name_completer(ctxt, cass):
 
 
 syntax_rules += r'''
-<alterTableStatement> ::= "ALTER" wat=( "COLUMNFAMILY" | "TABLE" ) cf=<columnFamilyName>
+<alterTableStatement> ::= "ALTER" wat=( "COLUMNFAMILY" | "TABLE" ) ("IF" "EXISTS")? cf=<columnFamilyName>
                                <alterInstructions>
                         ;
-<alterInstructions> ::= "ADD" newcol=<cident> <storageType> ("static")?
-                      | "DROP" existcol=<cident>
+<alterInstructions> ::= "ADD" ("IF" "NOT" "EXISTS")? newcol=<cident> <storageType> ("static")?
+                      | "DROP" ("IF" "EXISTS")? existcol=<cident>
                       | "WITH" <cfamProperty> ( "AND" <cfamProperty> )*
-                      | "RENAME" existcol=<cident> "TO" newcol=<cident>
+                      | "RENAME" ("IF" "EXISTS")? existcol=<cident> "TO" newcol=<cident>
                          ( "AND" existcol=<cident> "TO" newcol=<cident> )*
                       ;
 
-<alterUserTypeStatement> ::= "ALTER" "TYPE" ut=<userTypeName>
+<alterUserTypeStatement> ::= "ALTER" "TYPE" ("IF" "EXISTS")? ut=<userTypeName>
                                <alterTypeInstructions>
                              ;
-<alterTypeInstructions> ::= "ADD" newcol=<cident> <storageType>
-                           | "RENAME" existcol=<cident> "TO" newcol=<cident>
+<alterTypeInstructions> ::= "ADD" ("IF" "NOT" "EXISTS")? newcol=<cident> <storageType>
+                           | "RENAME" ("IF" "EXISTS")? existcol=<cident> "TO" newcol=<cident>
                               ( "AND" existcol=<cident> "TO" newcol=<cident> )*
                            ;
 '''
@@ -1420,7 +1442,7 @@ def alter_table_col_completer(ctxt, cass):
 @completer_for('alterTypeInstructions', 'existcol')
 def alter_type_field_completer(ctxt, cass):
     layout = get_ut_layout(ctxt, cass)
-    fields = [tuple[0] for tuple in layout]
+    fields = [atuple[0] for atuple in layout]
     return list(map(maybe_escape_name, fields))
 
 
@@ -1429,7 +1451,7 @@ explain_completion('alterTypeInstructions', 'newcol', '<new_field_name>')
 
 
 syntax_rules += r'''
-<alterKeyspaceStatement> ::= "ALTER" wat=( "KEYSPACE" | "SCHEMA" ) ks=<alterableKeyspaceName>
+<alterKeyspaceStatement> ::= "ALTER" wat=( "KEYSPACE" | "SCHEMA" ) ("IF" "EXISTS")? ks=<alterableKeyspaceName>
                                  "WITH" <property> ( "AND" <property> )*
                            ;
 '''
@@ -1439,11 +1461,11 @@ syntax_rules += r'''
              ;
 
 <createUserStatement> ::= "CREATE" "USER" ( "IF" "NOT" "EXISTS" )? <username>
-                              ( "WITH" "PASSWORD" <stringLiteral> )?
+                              ( "WITH" ("HASHED")? "PASSWORD" <stringLiteral> )?
                               ( "SUPERUSER" | "NOSUPERUSER" )?
                         ;
 
-<alterUserStatement> ::= "ALTER" "USER" <username>
+<alterUserStatement> ::= "ALTER" "USER" ("IF" "EXISTS")? <username>
                               ( "WITH" "PASSWORD" <stringLiteral> )?
                               ( "SUPERUSER" | "NOSUPERUSER" )?
                        ;
@@ -1465,11 +1487,11 @@ syntax_rules += r'''
                               ( "WITH" <roleProperty> ("AND" <roleProperty>)*)?
                         ;
 
-<alterRoleStatement> ::= "ALTER" "ROLE" <rolename>
+<alterRoleStatement> ::= "ALTER" "ROLE" ("IF" "EXISTS")? <rolename>
                               ( "WITH" <roleProperty> ("AND" <roleProperty>)*)?
                        ;
 
-<roleProperty> ::= "PASSWORD" "=" <stringLiteral>
+<roleProperty> ::= (("HASHED")? "PASSWORD") "=" <stringLiteral>
                  | "OPTIONS" "=" <mapLiteral>
                  | "SUPERUSER" "=" <boolean>
                  | "LOGIN" "=" <boolean>
@@ -1512,7 +1534,7 @@ syntax_rules += r'''
                | "EXECUTE"
                ;
 
-<permissionExpr> ::= ( <permission> "PERMISSION"? )
+<permissionExpr> ::= ( [newpermission]=<permission> "PERMISSION"? ( "," [newpermission]=<permission> "PERMISSION"? )* )
                    | ( "ALL" "PERMISSIONS"? )
                    ;
 
@@ -1524,6 +1546,7 @@ syntax_rules += r'''
 
 <dataResource> ::= ( "ALL" "KEYSPACES" )
                  | ( "KEYSPACE" <keyspaceName> )
+                 | ( "ALL" "TABLES" "IN" "KEYSPACE" <keyspaceName> )
                  | ( "TABLE"? <columnFamilyName> )
                  ;
 
@@ -1544,6 +1567,16 @@ syntax_rules += r'''
                 ;
 
 '''
+
+
+@completer_for('permissionExpr', 'newpermission')
+def permission_completer(ctxt, _):
+    new_permissions = set([permission.upper() for permission in ctxt.get_binding('newpermission')])
+    all_permissions = set([permission.arg for permission in ctxt.ruleset['permission'].arg])
+    suggestions = all_permissions - new_permissions
+    if len(suggestions) == 0:
+        return [Hint('No more permissions here.')]
+    return suggestions
 
 
 @completer_for('username', 'name')
