@@ -45,7 +45,7 @@ $ docker run -it --rm -p 9042:9042 cassandra
 $ cqlsh
 
 Connected to Test Cluster at 127.0.0.1:9042
-[cqlsh 6.0.0 | Cassandra 4.0.0 | CQL spec 3.4.5 | Native protocol v5]
+[cqlsh 6.1.0 | Cassandra 4.1.0 | CQL spec 3.4.5 | Native protocol v5]
 Use HELP for help.
 cqlsh>
 ```
@@ -59,11 +59,12 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
-#### 6.1.0 (Dec 20, 2022)
+#### 6.1.0 (Jan 3, 2022)
 
 This packages `cqlsh` `6.1.0` from [Cassandra 4.1](https://github.com/apache/cassandra/blob/cassandra-4.1.0/bin/cqlsh.py):
 * Requires Python 3.6+.
 * Although this is pulled from a Cassandra `4.x` release, it is protocol compatible with Cassandra `3.x` clusters, with the exception of DESCRIBE keywords which require a 4.x cluster.
+
 #### 6.0.1 (Jan 18, 2022)
 
 The actual source code is identical to the `cqlsh` `6.0.0` release, except it's now packaged as
