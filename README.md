@@ -1,6 +1,7 @@
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Downloads](https://pepy.tech/badge/cqlsh)](https://pepy.tech/project/cqlsh)
 [![PyPI version](https://badge.fury.io/py/cqlsh.svg)](https://badge.fury.io/py/cqlsh)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cqlsh)
+[![Downloads](https://pepy.tech/badge/cqlsh)](https://pepy.tech/project/cqlsh)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 # `cqlsh`
 
