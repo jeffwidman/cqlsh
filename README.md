@@ -63,6 +63,7 @@ shipped.
 #### 6.1.1 (March 21, 2023)
 
 This packages `cqlsh` `6.1.0` from [Cassandra 4.1.1](https://github.com/apache/cassandra/blob/cassandra-4.1.0/bin/cqlsh.py):
+* Now supports Python 3.11.
 * Although this is pulled from a Cassandra `4.x` release, it is protocol compatible with Cassandra `3.x` clusters, with the exception of DESCRIBE keywords which require a 4.x cluster.
 
 #### 6.1.0 (Jan 4, 2023)
