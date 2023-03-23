@@ -60,7 +60,7 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
-#### 6.1.1 (March 22, 2023)
+#### 6.1.1 (March 23, 2023)
 
 This packages `cqlsh` `6.1.0` from [Cassandra 4.1.1](https://github.com/apache/cassandra/blob/cassandra-4.1.0/bin/cqlsh.py):
 * Now supports Python 3.11.
