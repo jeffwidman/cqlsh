@@ -5,6 +5,5 @@ setup(
     name="cqlsh",
     install_requires=[
         "cassandra-driver",
-        "six",
     ],
 )
