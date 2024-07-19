@@ -5,5 +5,7 @@ setup(
     name="cqlsh",
     install_requires=[
         "cassandra-driver",
+        "pure-sasl",
+        "wcwidth",
     ],
 )

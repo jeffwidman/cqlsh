@@ -1,7 +1,7 @@
 import os
 import sys
-from cqlsh.cqlsh import main as cqlsh_main
-from cqlsh.cqlsh import read_options
+from .cqlshmain import main as cqlsh_main
+from .cqlshmain import read_options
 
 def main():
     cqlsh_main(*read_options(sys.argv[1:], os.environ))
