@@ -60,6 +60,11 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
+#### 6.2.0 (September 7, 2024)
+This packages `cqlsh` `6.2.0` from [Cassandra 5.0.0](https://github.com/apache/cassandra/blob/cassandra-5.0.0/pylib/cqlshlib):
+ * all cqlsh logic is now in cqlshlib, with cqlshmain.py replacing behavior in cqlsh.py
+ * this package provides a cqlsh.py script to call cqlshmain.py:main()
+
 #### 6.1.3 (Feburary 23, 2023)
 This packages `cqlsh` `6.1.0` from [Cassandra 4.1.4](https://github.com/apache/cassandra/blob/cassandra-4.1.4/bin/cqlsh.py):
  * CQLSH emits a warning when the server version doesn't match (CASSANDRA-18745)
