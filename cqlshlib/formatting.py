@@ -20,12 +20,12 @@ import math
 import os
 import re
 import sys
+import wcwidth
 
 from collections import defaultdict
 
 from cassandra.cqltypes import EMPTY
 from cassandra.util import datetime_from_timestamp
-from . import wcwidth
 from .displaying import colorme, get_str, FormattedValue, DEFAULT_VALUE_COLORS, NO_COLOR_MAP
 from .util import UTC
 
@@ -149,8 +149,8 @@ class CqlType:
     def parse(self, typestring, ksmeta):
         """
         Parse the typestring by looking at this pattern: *<*>. If there is no match then the type
-        is either a simple type or a user type, otherwise it must be a composite type
-        for which we need to look-up the sub-types. For user types the sub types can be extracted
+        is either a simple type or a user type, otherwise it must be a composite type or a vector type,
+        for which we need to look up the subtypes. For user types the subtypes can be extracted
         from the keyspace metadata.
         """
         while True:
@@ -167,8 +167,15 @@ class CqlType:
                     typestring = m.group(2)
                     continue
 
-                name = m.group(1)  # a composite type, parse sub types
-                return name, self.parse_sub_types(m.group(2), ksmeta), self._get_formatter(name)
+                name = m.group(1)  # a composite or vector type, parse subtypes
+                try:
+                    # Vector types are parameterized as name<type,size> so add custom handling for that here
+                    type_args = m.group(2).split(',')
+                    vector_type = CqlType(type_args[0])
+                    vector_size = int(type_args[1])
+                    return name, [vector_type for _ in range(vector_size)], self._get_formatter(name)
+                except (ValueError, IndexError):
+                    return name, self.parse_sub_types(m.group(2), ksmeta), self._get_formatter(name)
 
     @staticmethod
     def _get_formatter(name):
@@ -326,19 +333,9 @@ def format_integer_type(val, colormap, thousands_sep=None, **_):
     return colorme(bval, colormap, 'int')
 
 
-# We can get rid of this in cassandra-2.2
-if sys.version_info >= (2, 7):
-    def format_integer_with_thousands_sep(val, thousands_sep=','):
-        return "{:,.0f}".format(val).replace(',', thousands_sep)
-else:
-    def format_integer_with_thousands_sep(val, thousands_sep=','):
-        if val < 0:
-            return '-' + format_integer_with_thousands_sep(-val, thousands_sep)
-        result = ''
-        while val >= 1000:
-            val, r = divmod(val, 1000)
-            result = "%s%03d%s" % (thousands_sep, r, result)
-        return "%d%s" % (val, result)
+def format_integer_with_thousands_sep(val, thousands_sep=','):
+    return "{:,.0f}".format(val).replace(',', thousands_sep)
+
 
 formatter_for('long')(format_integer_type)
 formatter_for('int')(format_integer_type)

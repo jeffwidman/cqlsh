@@ -21,7 +21,7 @@ from cqlshlib.cqlhandling import CqlParsingRuleSet, Hint
 simple_cql_types = {'ascii', 'bigint', 'blob', 'boolean', 'counter', 'date', 'decimal', 'double', 'duration', 'float',
                     'inet', 'int', 'smallint', 'text', 'time', 'timestamp', 'timeuuid', 'tinyint', 'uuid', 'varchar',
                     'varint'}
-simple_cql_types.difference_update(('set', 'map', 'list'))
+simple_cql_types.difference_update(('set', 'map', 'list', 'vector'))
 
 cqldocs = helptopics.CQL3HelpTopics()
 
@@ -43,14 +43,17 @@ NONALTERBALE_KEYSPACES = ('system', 'system_schema', 'system_views', 'system_vir
 class Cql3ParsingRuleSet(CqlParsingRuleSet):
 
     columnfamily_layout_options = (
+        ('allow_auto_snapshot', None),
         ('bloom_filter_fp_chance', None),
         ('comment', None),
         ('gc_grace_seconds', None),
+        ('incremental_backups', None),
         ('min_index_interval', None),
         ('max_index_interval', None),
         ('default_time_to_live', None),
         ('speculative_retry', None),
         ('additional_write_policy', None),
+        ('memtable', None),
         ('memtable_flush_period_in_ms', None),
         ('cdc', None),
         ('read_repair', None),
@@ -63,7 +66,7 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
             ('class', 'max_threshold', 'tombstone_compaction_interval', 'tombstone_threshold', 'enabled',
              'unchecked_tombstone_compaction', 'only_purge_repaired_tombstones', 'provide_overlapping_tombstones')),
         ('compression', 'compression_parameters',
-            ('sstable_compression', 'chunk_length_kb', 'crc_check_chance')),
+            ('class', 'chunk_length_in_kb', 'enabled', 'min_compress_ratio', 'max_compressed_length')),
         ('caching', None,
             ('rows_per_partition', 'keys')),
     )
@@ -94,19 +97,24 @@ class Cql3ParsingRuleSet(CqlParsingRuleSet):
         'fanout_size'
     )
 
-    date_tiered_compaction_strategy_options = (
-        'base_time_seconds',
-        'max_sstable_age_days',
-        'min_threshold',
-        'max_window_size_seconds',
-        'timestamp_resolution'
-    )
-
     time_window_compaction_strategy_options = (
         'compaction_window_unit',
         'compaction_window_size',
         'min_threshold',
         'timestamp_resolution'
+    )
+
+    unified_compaction_strategy_options = (
+        'scaling_parameters',
+        'min_sstable_size',
+        'flush_size_override',
+        'base_shard_count',
+        'target_sstable_size',
+        'sstable_growth',
+        'max_sstables_to_compact',
+        'expired_sstable_check_frequency_seconds',
+        'unsafe_aggressive_sstable_expiration',
+        'overlap_inclusion_method'
     )
 
     @classmethod
@@ -310,7 +318,9 @@ JUNK ::= /([ \t\r\f\v]+|(--|[/][/])[^\n\r]*([\n\r]|$)|[/][*].*?[*][/])/ ;
 
 <userType> ::= utname=<cfOrKsName> ;
 
-<storageType> ::= <simpleStorageType> | <collectionType> | <frozenCollectionType> | <userType> ;
+<storageType> ::= ( <simpleStorageType> | <collectionType> | <frozenCollectionType> | <vectorType> | <userType> ) ( <column_mask> )? ;
+
+<column_mask> ::= "MASKED" "WITH" ( "DEFAULT" | <functionName> <selectionFunctionArguments> );
 
 # Note: autocomplete for frozen collection types does not handle nesting past depth 1 properly,
 # but that's a lot of work to fix for little benefit.
@@ -323,6 +333,8 @@ JUNK ::= /([ \t\r\f\v]+|(--|[/][/])[^\n\r]*([\n\r]|$)|[/][*].*?[*][/])/ ;
                          | "frozen" "<" "list" "<" <storageType> ">" ">"
                          | "frozen" "<" "set"  "<" <storageType> ">" ">"
                          ;
+
+<vectorType> ::= "vector" "<" <storageType> "," <wholenumber> ">" ;
 
 <columnFamilyName> ::= ( ksname=<cfOrKsName> dot="." )? cfname=<cfOrKsName> ;
 
@@ -503,7 +515,7 @@ def cf_prop_val_completer(ctxt, cass):
     exist_opts = ctxt.get_binding('propname')
     this_opt = exist_opts[-1]
     if this_opt == 'compression':
-        return ["{'sstable_compression': '"]
+        return ["{'class': '"]
     if this_opt == 'compaction':
         return ["{'class': '"]
     if this_opt == 'caching':
@@ -519,6 +531,10 @@ def cf_prop_val_completer(ctxt, cass):
         return [Hint('<true|false>')]
     if this_opt in ('read_repair'):
         return [Hint('<\'none\'|\'blocking\'>')]
+    if this_opt == 'allow_auto_snapshot':
+        return [Hint('<boolean>')]
+    if this_opt == 'incremental_backups':
+        return [Hint('<boolean>')]
     return [Hint('<option_value>')]
 
 
@@ -547,10 +563,10 @@ def cf_prop_val_mapkey_completer(ctxt, cass):
             opts = opts.union(set(CqlRuleSet.size_tiered_compaction_strategy_options))
         elif csc == 'LeveledCompactionStrategy':
             opts = opts.union(set(CqlRuleSet.leveled_compaction_strategy_options))
-        elif csc == 'DateTieredCompactionStrategy':
-            opts = opts.union(set(CqlRuleSet.date_tiered_compaction_strategy_options))
         elif csc == 'TimeWindowCompactionStrategy':
             opts = opts.union(set(CqlRuleSet.time_window_compaction_strategy_options))
+        elif csc == 'UnifiedCompactionStrategy':
+            opts = opts.union(set(CqlRuleSet.unified_compaction_strategy_options))
 
         return list(map(escape_value, opts))
     return ()
@@ -566,7 +582,7 @@ def cf_prop_val_mapval_completer(ctxt, cass):
             return [Hint('<NONE|ROW|CELL>')]
         return [Hint('<option_value>')]
     elif opt == 'compression':
-        if key == 'sstable_compression':
+        if key == 'class':
             return list(map(escape_value, CqlRuleSet.available_compression_classes))
         return [Hint('<option_value>')]
     elif opt == 'caching':
@@ -736,6 +752,7 @@ syntax_rules += r'''
 <selector> ::= [colname]=<cident> ( "[" ( <term> ( ".." <term> "]" )? | <term> ".." ) )?
              | <udtSubfieldSelection>
              | "WRITETIME" "(" [colname]=<cident> ")"
+             | "MAXWRITETIME" "(" [colname]=<cident> ")"
              | "TTL" "(" [colname]=<cident> ")"
              | "COUNT" "(" star=( "*" | "1" ) ")"
              | "CAST" "(" <selector> "AS" <storageType> ")"
@@ -922,9 +939,9 @@ def insert_newval_completer(ctxt, cass):
         return []
     curcol = insertcols[len(valuesdone)]
     coltype = layout.columns[curcol].cql_type
-    if coltype in ('map', 'set'):
+    if coltype.startswith('map<') or coltype.startswith('set<'):
         return ['{']
-    if coltype == 'list':
+    if coltype.startswith('list<') or coltype.startswith('vector<'):
         return ['[']
     if coltype == 'boolean':
         return ['true', 'false']
@@ -999,10 +1016,10 @@ def update_countername_completer(ctxt, cass):
     coltype = layout.columns[curcol].cql_type
     if coltype == 'counter':
         return [maybe_escape_name(curcol)]
-    if coltype in ('map', 'set'):
-        return ["{"]
-    if coltype == 'list':
-        return ["["]
+    if coltype.startswith('map<') or coltype.startswith('set<'):
+        return ['{']
+    if coltype.startswith('list<') or coltype.startswith('vector<'):
+        return ['[']
     return [Hint('<term (%s)>' % coltype)]
 
 
@@ -1065,7 +1082,7 @@ def assignment_udt_field_completer(ctxt, cass):
 
 def _is_usertype(layout, curcol):
     coltype = layout.columns[curcol].cql_type
-    return coltype not in simple_cql_types and coltype not in ('map', 'set', 'list')
+    return coltype not in simple_cql_types and coltype not in ('map', 'set', 'list', 'vector')
 
 
 def _usertype_fields(ctxt, cass, layout, curcol):
@@ -1308,7 +1325,7 @@ syntax_rules += r'''
                                       ( "WITH" <cfamProperty> ( "AND" <cfamProperty> )* )?
                                     ;
 
-<createUserTypeStatement> ::= "CREATE" "TYPE" ( ks=<nonSystemKeyspaceName> dot="." )? typename=<cfOrKsName> "(" newcol=<cident> <storageType>
+<createUserTypeStatement> ::= "CREATE" "TYPE" ("IF" "NOT" "EXISTS")? ( ks=<nonSystemKeyspaceName> dot="." )? typename=<cfOrKsName> "(" newcol=<cident> <storageType>
                                 ( "," [newcolname]=<cident> <storageType> )*
                             ")"
                          ;
@@ -1372,7 +1389,7 @@ syntax_rules += r'''
 <dropMaterializedViewStatement> ::= "DROP" "MATERIALIZED" "VIEW" ("IF" "EXISTS")? mv=<materializedViewName>
                                   ;
 
-<dropUserTypeStatement> ::= "DROP" "TYPE" ut=<userTypeName>
+<dropUserTypeStatement> ::= "DROP" "TYPE" ( "IF" "EXISTS" )? ut=<userTypeName>
                           ;
 
 <dropFunctionStatement> ::= "DROP" "FUNCTION" ( "IF" "EXISTS" )? <userFunctionName>
@@ -1420,6 +1437,7 @@ syntax_rules += r'''
                       | "WITH" <cfamProperty> ( "AND" <cfamProperty> )*
                       | "RENAME" ("IF" "EXISTS")? existcol=<cident> "TO" newcol=<cident>
                          ( "AND" existcol=<cident> "TO" newcol=<cident> )*
+                      | "ALTER" ("IF" "EXISTS")? existcol=<cident> ( <column_mask> | "DROP" "MASKED" )
                       ;
 
 <alterUserTypeStatement> ::= "ALTER" "TYPE" ("IF" "EXISTS")? ut=<userTypeName>
@@ -1483,12 +1501,12 @@ syntax_rules += r'''
              | <unreservedKeyword>
              ;
 
-<createRoleStatement> ::= "CREATE" "ROLE" <rolename>
+<createRoleStatement> ::= "CREATE" "ROLE" ("IF" "NOT" "EXISTS")? <rolename>
                               ( "WITH" <roleProperty> ("AND" <roleProperty>)*)?
                         ;
 
 <alterRoleStatement> ::= "ALTER" "ROLE" ("IF" "EXISTS")? <rolename>
-                              ( "WITH" <roleProperty> ("AND" <roleProperty>)*)?
+                              ( "WITH" <roleProperty> ("AND" <roleProperty>)*)
                        ;
 
 <roleProperty> ::= (("HASHED")? "PASSWORD") "=" <stringLiteral>
@@ -1497,9 +1515,11 @@ syntax_rules += r'''
                  | "LOGIN" "=" <boolean>
                  | "ACCESS" "TO" "DATACENTERS" <setLiteral>
                  | "ACCESS" "TO" "ALL" "DATACENTERS"
+                 | "ACCESS" "FROM" "CIDRS" <setLiteral>
+                 | "ACCESS" "FROM" "ALL" "CIDRS"
                  ;
 
-<dropRoleStatement> ::= "DROP" "ROLE" <rolename>
+<dropRoleStatement> ::= "DROP" "ROLE" ("IF" "EXISTS")? <rolename>
                       ;
 
 <grantRoleStatement> ::= "GRANT" <rolename> "TO" <rolename>
@@ -1532,6 +1552,8 @@ syntax_rules += r'''
                | "MODIFY"
                | "DESCRIBE"
                | "EXECUTE"
+               | "UNMASK"
+               | "SELECT_MASKED"
                ;
 
 <permissionExpr> ::= ( [newpermission]=<permission> "PERMISSION"? ( "," [newpermission]=<permission> "PERMISSION"? )* )
