@@ -66,7 +66,6 @@ This packages `cqlsh` `6.2.0` from [Cassandra 5.0.0](https://github.com/apache/c
  * Add HISTORY command for CQLSH (CASSANDRA-15046)
  * Add CQLSH command SHOW REPLICAS (CASSANDRA-17577)
  * Cassandra 5.0 has refactored all cqlsh logic to be in cqlshlib, with the new cqlshmain.py replacing behavior formerly in bin/cqlsh.py
- * This package provides a cqlsh.py script runner to call cqlshmain.py:main()
  * Replace 'wcwidth.py' with pypi module (CASSANDRA-17287)
 
 #### 6.1.3 (Feburary 23, 2023)
