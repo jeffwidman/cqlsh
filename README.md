@@ -60,7 +60,7 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
-#### 6.2.0 (September 7, 2024)
+#### 6.2.0 (September 16, 2024)
 
 This packages `cqlsh` `6.2.0` from [Cassandra 5.0.0](https://github.com/apache/cassandra/blob/cassandra-5.0.0/pylib/cqlshlib):
  * Add HISTORY command for CQLSH (CASSANDRA-15046)
