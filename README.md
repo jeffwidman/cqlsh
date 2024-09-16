@@ -60,7 +60,16 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
+#### 6.2.0 (September 7, 2024)
+
+This packages `cqlsh` `6.2.0` from [Cassandra 5.0.0](https://github.com/apache/cassandra/blob/cassandra-5.0.0/pylib/cqlshlib):
+ * Add HISTORY command for CQLSH (CASSANDRA-15046)
+ * Add CQLSH command SHOW REPLICAS (CASSANDRA-17577)
+ * Cassandra 5.0 has refactored all cqlsh logic to be in cqlshlib, with the new cqlshmain.py replacing behavior formerly in bin/cqlsh.py
+ * Replace 'wcwidth.py' with pypi module (CASSANDRA-17287)
+
 #### 6.1.3 (Feburary 23, 2023)
+
 This packages `cqlsh` `6.1.0` from [Cassandra 4.1.4](https://github.com/apache/cassandra/blob/cassandra-4.1.4/bin/cqlsh.py):
  * CQLSH emits a warning when the server version doesn't match (CASSANDRA-18745)
  * Fix CQLSH online help topic link (CASSANDRA-17534)

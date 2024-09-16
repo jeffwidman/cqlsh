@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -20,60 +18,58 @@ import cmd
 import codecs
 import configparser
 import csv
-import errno
 import getpass
 import argparse
 import os
-import platform
 import re
-import stat
 import subprocess
 import sys
 import traceback
 import warnings
 import webbrowser
 from contextlib import contextmanager
-from glob import glob
+from enum import Enum
 from io import StringIO
 from uuid import UUID
 
-if sys.version_info < (3, 6):
-    sys.exit("\ncqlsh requires Python 3.6+\n")
+import cassandra
+from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster
+from cassandra.cqltypes import cql_typename
+from cassandra.marshal import int64_unpack
+from cassandra.metadata import (ColumnMetadata, KeyspaceMetadata, TableMetadata)
+from cassandra.policies import WhiteListRoundRobinPolicy
+from cassandra.query import SimpleStatement, ordered_dict_factory, TraceUnavailable
+from cassandra.util import datetime_from_timestamp
 
-# see CASSANDRA-10428
-if platform.python_implementation().startswith('Jython'):
-    sys.exit("\nCQL Shell does not run on Jython\n")
+from cqlshlib import cql3handling, pylexotron, sslhandling, cqlshhandling, authproviderhandling
+from cqlshlib.copyutil import ExportTask, ImportTask
+from cqlshlib.displaying import (ANSI_RESET, BLUE, COLUMN_NAME_COLORS, CYAN,
+                                 RED, WHITE, FormattedValue, colorme)
+from cqlshlib.formatting import (DEFAULT_DATE_FORMAT, DEFAULT_NANOTIME_FORMAT,
+                                 DEFAULT_TIMESTAMP_FORMAT, CqlType, DateTimeFormat,
+                                 format_by_type)
+from cqlshlib.tracing import print_trace, print_trace_session
+from cqlshlib.util import get_file_encoding_bomsize, is_file_secure
+try:
+    from cqlshlib.serverversion import version as build_version
+except ImportError:
+    build_version = 'UNKNOWN'
+
 
 UTF8 = 'utf-8'
 
 description = "CQL Shell for Apache Cassandra"
-version = "6.1.0"
+version = "6.2.0"
 
 readline = None
 try:
-    # check if tty first, cause readline doesn't check, and only cares
-    # about $TERM. we don't want the funky escape code stuff to be
-    # output if not a tty.
+    # Check if tty first, as readline doesn't check and only cares about $TERM.
+    # We don't want the funky escape code stuff to be output if not a tty.
     if sys.stdin.isatty():
         import readline
 except ImportError:
     pass
-
-CQL_LIB_PREFIX = 'cassandra-driver-internal-only-'
-
-CASSANDRA_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
-CASSANDRA_CQL_HTML_FALLBACK = 'https://cassandra.apache.org/doc/latest/cassandra/cql/cql_singlefile.html'
-
-# default location of local CQL.html
-if os.path.exists(CASSANDRA_PATH + '/doc/cql3/CQL.html'):
-    # default location of local CQL.html
-    CASSANDRA_CQL_HTML = 'file://' + CASSANDRA_PATH + '/doc/cql3/CQL.html'
-elif os.path.exists('/usr/share/doc/cassandra/CQL.html'):
-    # fallback to package file
-    CASSANDRA_CQL_HTML = 'file:///usr/share/doc/cassandra/CQL.html'
-else:
-    # fallback to online version
-    CASSANDRA_CQL_HTML = CASSANDRA_CQL_HTML_FALLBACK
 
 # On Linux, the Python webbrowser module uses the 'xdg-open' executable
 # to open a file/URL. But that only works, if the current session has been
@@ -89,78 +85,7 @@ if webbrowser._tryorder and webbrowser._tryorder[0] == 'xdg-open' and os.environ
     webbrowser._tryorder.remove('xdg-open')
     webbrowser._tryorder.append('xdg-open')
 
-# use bundled lib for python-cql if available. if there
-# is a ../lib dir, use bundled libs there preferentially.
-ZIPLIB_DIRS = [os.path.join(CASSANDRA_PATH, 'lib')]
-
-if platform.system() == 'Linux':
-    ZIPLIB_DIRS.append('/usr/share/cassandra/lib')
-
-if os.environ.get('CQLSH_NO_BUNDLED', ''):
-    ZIPLIB_DIRS = ()
-
-
-def find_zip(libprefix):
-    for ziplibdir in ZIPLIB_DIRS:
-        zips = glob(os.path.join(ziplibdir, libprefix + '*.zip'))
-        if zips:
-            return max(zips)   # probably the highest version, if multiple
-
-
-cql_zip = find_zip(CQL_LIB_PREFIX)
-if cql_zip:
-    ver = os.path.splitext(os.path.basename(cql_zip))[0][len(CQL_LIB_PREFIX):]
-    sys.path.insert(0, os.path.join(cql_zip, 'cassandra-driver-' + ver))
-
-# the driver needs dependencies
-third_parties = ('six-', 'pure_sasl-')
-
-for lib in third_parties:
-    lib_zip = find_zip(lib)
-    if lib_zip:
-        sys.path.insert(0, lib_zip)
-
 warnings.filterwarnings("ignore", r".*blist.*")
-try:
-    import cassandra
-except ImportError as e:
-    sys.exit("\nPython Cassandra driver not installed, or not on PYTHONPATH.\n"
-             'You might try "pip install cassandra-driver".\n\n'
-             'Python: %s\n'
-             'Module load path: %r\n\n'
-             'Error: %s\n' % (sys.executable, sys.path, e))
-
-from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster
-from cassandra.cqltypes import cql_typename
-from cassandra.marshal import int64_unpack
-from cassandra.metadata import (ColumnMetadata, KeyspaceMetadata, TableMetadata)
-from cassandra.policies import WhiteListRoundRobinPolicy
-from cassandra.query import SimpleStatement, ordered_dict_factory, TraceUnavailable
-from cassandra.util import datetime_from_timestamp
-
-# cqlsh should run correctly when run out of a Cassandra source tree,
-# out of an unpacked Cassandra tarball, and after a proper package install.
-cqlshlibdir = os.path.join(CASSANDRA_PATH, 'pylib')
-if os.path.isdir(cqlshlibdir):
-    sys.path.insert(0, cqlshlibdir)
-
-from cqlshlib import cql3handling, pylexotron, sslhandling, cqlshhandling, authproviderhandling
-from cqlshlib.copyutil import ExportTask, ImportTask
-from cqlshlib.displaying import (ANSI_RESET, BLUE, COLUMN_NAME_COLORS, CYAN,
-                                 RED, WHITE, FormattedValue, colorme)
-from cqlshlib.formatting import (DEFAULT_DATE_FORMAT, DEFAULT_NANOTIME_FORMAT,
-                                 DEFAULT_TIMESTAMP_FORMAT, CqlType, DateTimeFormat,
-                                 format_by_type)
-from cqlshlib.tracing import print_trace, print_trace_session
-from cqlshlib.util import get_file_encoding_bomsize
-from cqlshlib.util import is_file_secure
-from cqlshlib.serverversion import version as build_version
-try:
-    from cqlshlib.serverversion import version as build_version
-except ImportError:
-    build_version = "UNKNOWN"
-
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 9042
@@ -179,11 +104,13 @@ else:
 
 cqldocs = None
 cqlruleset = None
+CASSANDRA_CQL_HTML = None
 
 epilog = """Connects to %(DEFAULT_HOST)s:%(DEFAULT_PORT)d by default. These
 defaults can be changed by setting $CQLSH_HOST and/or $CQLSH_PORT. When a
 host (and optional port number) are given on the command line, they take
 precedence over any defaults.""" % globals()
+
 
 parser = argparse.ArgumentParser(description=description, epilog=epilog,
                                  usage="Usage: %(prog)s [options] [host [port]]",
@@ -231,9 +158,11 @@ parser.add_argument("-t", "--tty", action='store_true', dest='tty',
 parser.add_argument("--insecure-password-without-warning", action='store_true', dest='insecure_password_without_warning',
                     help=argparse.SUPPRESS)
 
+# use cfarguments for config file
+
 cfarguments, args = parser.parse_known_args()
 
-# BEGIN history/config definition
+# BEGIN history config
 
 
 def mkdirp(path):
@@ -261,6 +190,9 @@ try:
     mkdirp(HISTORY_DIR)
 except OSError:
     print('\nWarning: Cannot create directory at `%s`. Command history will not be saved. Please check what was the environment property CQL_HISTORY set to.\n' % HISTORY_DIR)
+
+
+# END history config
 
 DEFAULT_CQLSHRC = os.path.expanduser(os.path.join('~', '.cassandra', 'cqlshrc'))
 
@@ -363,6 +295,11 @@ def full_cql_version(ver):
     return ver, vertuple
 
 
+class SwitchState(Enum):
+    ON = True
+    OFF = False
+
+
 def format_value(val, cqltype, encoding, addcolor=False, date_time_format=None,
                  float_precision=None, colormap=None, nullval=None):
     if isinstance(val, DecodeError):
@@ -386,30 +323,6 @@ def show_warning_without_quoting_line(message, category, filename, lineno, file=
 
 warnings.showwarning = show_warning_without_quoting_line
 warnings.filterwarnings('always', category=cql3handling.UnexpectedTableStructure)
-
-
-def insert_driver_hooks():
-
-    class DateOverFlowWarning(RuntimeWarning):
-        pass
-
-    # Native datetime types blow up outside of datetime.[MIN|MAX]_YEAR. We will fall back to an int timestamp
-    def deserialize_date_fallback_int(byts, protocol_version):
-        timestamp_ms = int64_unpack(byts)
-        try:
-            return datetime_from_timestamp(timestamp_ms / 1000.0)
-        except OverflowError:
-            warnings.warn(DateOverFlowWarning("Some timestamps are larger than Python datetime can represent. "
-                                              "Timestamps are displayed in milliseconds from epoch."))
-            return timestamp_ms
-
-    cassandra.cqltypes.DateType.deserialize = staticmethod(deserialize_date_fallback_int)
-
-    if hasattr(cassandra, 'deserializers'):
-        del cassandra.deserializers.DesDateType
-
-    # Return cassandra.cqltypes.EMPTY instead of None for empty values
-    cassandra.cqltypes.CassandraType.support_empty_values = True
 
 
 class Shell(cmd.Cmd):
@@ -613,6 +526,13 @@ class Shell(cmd.Cmd):
 
     def show_session(self, sessionid, partial_session=False):
         print_trace_session(self, self.session, sessionid, partial_session)
+
+    def show_replicas(self, token_value, keyspace=None):
+        ks = self.current_keyspace if keyspace is None else keyspace
+        token_map = self.conn.metadata.token_map
+        nodes = token_map.get_replicas(ks, token_map.token_class(token_value))
+        addresses = [x.address for x in nodes]
+        print(f"{addresses}")
 
     def get_connection_versions(self):
         result, = self.session.execute("select * from system.local where key = 'local'")
@@ -993,7 +913,7 @@ class Shell(cmd.Cmd):
         if parsed:
             self.printerr('Improper %s command (problem at %r).' % (cmdword, parsed.remainder[0]))
         else:
-            self.printerr('Improper %s command.' % cmdword)
+            self.printerr(f'Improper {cmdword} command.')
 
     def do_use(self, parsed):
         ksname = parsed.get_binding('ksname')
@@ -1364,7 +1284,7 @@ class Shell(cmd.Cmd):
         future = self.session.execute_async(stmt)
 
         if self.connection_versions['build'][0] < '4':
-            print('\nWARN: DESCRIBE|DESC was moved to server side in Cassandra 4.0. As a consequence DESRIBE|DESC '
+            print('\nWARN: DESCRIBE|DESC was moved to server side in Cassandra 4.0. As a consequence DESCRIBE|DESC '
                   'will not work in cqlsh %r connected to Cassandra %r, the version that you are connected to. '
                   'DESCRIBE does not exist server side prior Cassandra 4.0.'
                   % (version, self.connection_versions['build']))
@@ -1592,6 +1512,11 @@ class Shell(cmd.Cmd):
         SHOW SESSION <sessionid>
 
           Pretty-prints the requested tracing session.
+
+        SHOW REPLICAS <token> (<keyspace>)
+
+          Lists the replica nodes by IP address for the given token. The current
+          keyspace is used if one is not specified.
         """
         showwhat = parsed.get_binding('what').lower()
         if showwhat == 'version':
@@ -1602,6 +1527,10 @@ class Shell(cmd.Cmd):
         elif showwhat.startswith('session'):
             session_id = parsed.get_binding('sessionid').lower()
             self.show_session(UUID(session_id))
+        elif showwhat.startswith('replicas'):
+            token_id = parsed.get_binding('token')
+            keyspace = parsed.get_binding('keyspace')
+            self.show_replicas(token_id, keyspace)
         else:
             self.printerr('Wait, how do I show %r?' % (showwhat,))
 
@@ -1738,7 +1667,8 @@ class Shell(cmd.Cmd):
 
           TRACING with no arguments shows the current tracing status.
         """
-        self.tracing_enabled = SwitchCommand("TRACING", "Tracing").execute(self.tracing_enabled, parsed, self.printerr)
+        self.tracing_enabled \
+            = self.on_off_switch("TRACING", self.tracing_enabled, parsed.get_binding('switch'))
 
     def do_expand(self, parsed):
         """
@@ -1758,7 +1688,7 @@ class Shell(cmd.Cmd):
 
           EXPAND with no arguments shows the current value of expand setting.
         """
-        self.expand_enabled = SwitchCommand("EXPAND", "Expanded output").execute(self.expand_enabled, parsed, self.printerr)
+        self.expand_enabled = self.on_off_switch("EXPAND", self.expand_enabled, parsed.get_binding('switch'))
 
     def do_consistency(self, parsed):
         """
@@ -1924,6 +1854,26 @@ class Shell(cmd.Cmd):
             else:
                 self.printerr("*** No help on %s" % (t,))
 
+    def do_history(self, parsed):
+        """
+        HISTORY [cqlsh only]
+
+           Displays the most recent commands executed in cqlsh
+
+        HISTORY (<n>)
+
+           If n is specified, the history display length is set to n for this session
+        """
+
+        history_length = readline.get_current_history_length()
+
+        n = parsed.get_binding('n')
+        if (n is not None):
+            self.max_history_length_shown = int(n)
+
+        for index in range(max(1, history_length - self.max_history_length_shown), history_length):
+            print(readline.get_history_item(index))
+
     def do_unicode(self, parsed):
         """
         Textual input/output
@@ -1959,8 +1909,8 @@ class Shell(cmd.Cmd):
 
           PAGING with no arguments shows the current query paging status.
         """
-        (self.use_paging, requested_page_size) = SwitchCommandWithValue(
-            "PAGING", "Query paging", value_type=int).execute(self.use_paging, parsed, self.printerr)
+        (self.use_paging, requested_page_size) = \
+            self.on_off_switch_with_value("PAGING", self.use_paging, parsed.get_binding('switch'))
         if self.use_paging and requested_page_size is not None:
             self.page_size = requested_page_size
         if self.use_paging:
@@ -2001,65 +1951,67 @@ class Shell(cmd.Cmd):
             self.cov.save()
             self.cov = None
 
+    def init_history(self):
+        if readline is not None:
+            try:
+                readline.read_history_file(HISTORY)
+            except IOError:
+                pass
+            delims = readline.get_completer_delims()
+            delims.replace("'", "")
+            delims += '.'
+            readline.set_completer_delims(delims)
 
-class SwitchCommand(object):
-    command = None
-    description = None
+            # configure length of history shown
+            self.max_history_length_shown = 50
 
-    def __init__(self, command, desc):
-        self.command = command
-        self.description = desc
+    def save_history(self):
+        if readline is not None:
+            try:
+                readline.write_history_file(HISTORY)
+            except IOError:
+                pass
 
-    def execute(self, state, parsed, printerr):
-        switch = parsed.get_binding('switch')
-        if switch is None:
-            if state:
-                print("%s is currently enabled. Use %s OFF to disable"
-                      % (self.description, self.command))
-            else:
-                print("%s is currently disabled. Use %s ON to enable."
-                      % (self.description, self.command))
-            return state
+    @staticmethod
+    def on_off_switch(name, current, state_name=None):
+        """
+        switches between ON and OFF values
 
-        if switch.upper() == 'ON':
-            if state:
-                printerr('%s is already enabled. Use %s OFF to disable.'
-                         % (self.description, self.command))
-                return state
-            print('Now %s is enabled' % (self.description,))
-            return True
+        :param name: a command name
+        :param current: a boolean value
+        :param state_name: "ON", "OFF" or None
+        :return: a boolean value
+        """
 
-        if switch.upper() == 'OFF':
-            if not state:
-                printerr('%s is not enabled.' % (self.description,))
-                return state
-            print('Disabled %s.' % (self.description,))
-            return False
+        if state_name is None:
+            print(f"{name} is {SwitchState(current).name}")
+            return current
 
+        new_state = SwitchState[state_name.upper()]
+        if current == new_state.value:
+            print(f"{name} is already {SwitchState(current).name}")
+            return current
+        else:
+            print(f"{name} set to {new_state.name}")
+            return new_state.value
 
-class SwitchCommandWithValue(SwitchCommand):
-    """The same as SwitchCommand except it also accepts a value in place of ON.
+    @staticmethod
+    def on_off_switch_with_value(name, current, value=None):
+        """switches between ON and OFF values, and accepts an integer value in place of ON.
 
-    This returns a tuple of the form: (SWITCH_VALUE, PASSED_VALUE)
-    eg: PAGING 50 returns (True, 50)
-        PAGING OFF returns (False, None)
-        PAGING ON returns (True, None)
+        This returns a tuple of the form: (SWITCH_VALUE, VALUE)
+        eg: PAGING 50 returns (True, 50)
+            PAGING OFF returns (False, None)
+            PAGING ON returns (True, None)
 
-    The value_type must match for the PASSED_VALUE, otherwise it will return None.
-    """
-    def __init__(self, command, desc, value_type=int):
-        SwitchCommand.__init__(self, command, desc)
-        self.value_type = value_type
-
-    def execute(self, state, parsed, printerr):
-        binary_switch_value = SwitchCommand.execute(self, state, parsed, printerr)
-        switch = parsed.get_binding('switch')
-        try:
-            value = self.value_type(switch)
-            binary_switch_value = True
-        except (ValueError, TypeError):
-            value = None
-        return binary_switch_value, value
+        VALUE must be an Integer or None.
+        """
+        if value is None:
+            print(f"{name} is {SwitchState(current).name}")
+            return current, None
+        if value.isdigit():
+            return True, int(value)
+        return Shell.on_off_switch(name, current, value), None
 
 
 def option_with_default(cparser_getter, section, option, default=None):
@@ -2097,7 +2049,7 @@ def should_use_color():
     return True
 
 
-def read_options(cmdlineargs, environment):
+def read_options(cmdlineargs, environment=os.environ):
     configs = configparser.ConfigParser()
     configs.read(CONFIG_FILE)
 
@@ -2164,7 +2116,9 @@ def read_options(cmdlineargs, environment):
     # we need the following so that these two scenarios will work
     #   cqlsh --credentials=~/.cassandra/creds
     #   cqlsh --credentials ~/.cassandra/creds
-    options.credentials = os.path.expanduser(options.credentials)
+
+    if options.credentials is not None:
+        options.credentials = os.path.expanduser(options.credentials)
 
     if options.credentials is not None:
         if not is_file_secure(options.credentials):
@@ -2180,18 +2134,19 @@ def read_options(cmdlineargs, environment):
 
     if not options.username:
         credentials = configparser.ConfigParser()
-        credentials.read(options.credentials)
+        if options.credentials is not None:
+            credentials.read(options.credentials)
 
         # use the username from credentials file but fallback to cqlshrc if username is absent from the command line parameters
-        options.username = username_from_cqlshrc
+        options.username = option_with_default(credentials.get, 'plain_text_auth', 'username', username_from_cqlshrc)
 
     if not options.password:
         rawcredentials = configparser.RawConfigParser()
-        rawcredentials.read(options.credentials)
+        if options.credentials is not None:
+            rawcredentials.read(options.credentials)
 
         # handling password in the same way as username, priority cli > credentials > cqlshrc
         options.password = option_with_default(rawcredentials.get, 'plain_text_auth', 'password', password_from_cqlshrc)
-        options.password = password_from_cqlshrc
     elif not options.insecure_password_without_warning:
         print("\nWarning: Using a password on the command line interface can be insecure."
               "\nRecommendation: use the credentials file to securely provide the password.\n", file=sys.stderr)
@@ -2266,30 +2221,54 @@ def setup_cqldocs(cqlmodule):
     cqldocs = cqlmodule.cqldocs
 
 
-def init_history():
-    if readline is not None:
+def setup_docspath(path):
+    global CASSANDRA_CQL_HTML
+    CASSANDRA_CQL_HTML_FALLBACK = 'https://cassandra.apache.org/doc/latest/cassandra/cql/cql_singlefile.html'
+    #
+    # default location of local CQL.html
+    if os.path.exists(path + '/doc/cql3/CQL.html'):
+        # default location of local CQL.html
+        CASSANDRA_CQL_HTML = 'file://' + path + '/doc/cql3/CQL.html'
+    elif os.path.exists('/usr/share/doc/cassandra/CQL.html'):
+        # fallback to package file
+        CASSANDRA_CQL_HTML = 'file:///usr/share/doc/cassandra/CQL.html'
+    else:
+        # fallback to online version
+        CASSANDRA_CQL_HTML = CASSANDRA_CQL_HTML_FALLBACK
+
+
+def insert_driver_hooks():
+
+    class DateOverFlowWarning(RuntimeWarning):
+        pass
+
+    # Display milliseconds when datetime overflows (CASSANDRA-10625), E.g., the year 10000.
+    # Native datetime types blow up outside of datetime.[MIN|MAX]_YEAR. We will fall back to an int timestamp
+    def deserialize_date_fallback_int(byts, protocol_version):
+        timestamp_ms = int64_unpack(byts)
         try:
-            readline.read_history_file(HISTORY)
-        except IOError:
-            pass
-        delims = readline.get_completer_delims()
-        delims.replace("'", "")
-        delims += '.'
-        readline.set_completer_delims(delims)
+            return datetime_from_timestamp(timestamp_ms / 1000.0)
+        except OverflowError:
+            warnings.warn(DateOverFlowWarning("Some timestamps are larger than Python datetime can represent. "
+                                              "Timestamps are displayed in milliseconds from epoch."))
+            return timestamp_ms
+
+    cassandra.cqltypes.DateType.deserialize = staticmethod(deserialize_date_fallback_int)
+
+    if hasattr(cassandra, 'deserializers'):
+        del cassandra.deserializers.DesDateType
+
+    # Return cassandra.cqltypes.EMPTY instead of None for empty values
+    cassandra.cqltypes.CassandraType.support_empty_values = True
 
 
-def save_history():
-    if readline is not None:
-        try:
-            readline.write_history_file(HISTORY)
-        except IOError:
-            pass
+def main(cmdline, pkgpath):
+    insert_driver_hooks()
+    (options, hostname, port) = read_options(cmdline)
 
-
-def main(options, hostname, port):
+    setup_docspath(pkgpath)
     setup_cqlruleset(options.cqlmodule)
     setup_cqldocs(options.cqlmodule)
-    init_history()
     csv.field_size_limit(options.field_size_limit)
 
     if options.file is None:
@@ -2311,20 +2290,37 @@ def main(options, hostname, port):
     # create timezone based on settings, environment or auto-detection
     timezone = None
     if options.timezone or 'TZ' in os.environ:
-        try:
-            import pytz
-            if options.timezone:
-                try:
-                    timezone = pytz.timezone(options.timezone)
-                except Exception:
-                    sys.stderr.write("Warning: could not recognize timezone '%s' specified in cqlshrc\n\n" % (options.timezone))
-            if 'TZ' in os.environ:
-                try:
-                    timezone = pytz.timezone(os.environ['TZ'])
-                except Exception:
-                    sys.stderr.write("Warning: could not recognize timezone '%s' from environment value TZ\n\n" % (os.environ['TZ']))
-        except ImportError:
-            sys.stderr.write("Warning: Timezone defined and 'pytz' module for timezone conversion not installed. Timestamps will be displayed in UTC timezone.\n\n")
+        if sys.version_info >= (3, 9):
+            try:
+                import zoneinfo
+                if options.timezone:
+                    try:
+                        timezone = zoneinfo.ZoneInfo(options.timezone)
+                    except Exception:
+                        sys.stderr.write("Warning: could not recognize timezone '%s' specified in cqlshrc\n\n" % (options.timezone))
+                if 'TZ' in os.environ:
+                    try:
+                        timezone = zoneinfo.ZoneInfo(os.environ['TZ'])
+                    except Exception:
+                        sys.stderr.write("Warning: could not recognize timezone '%s' from environment value TZ\n\n" % (os.environ['TZ']))
+            except ImportError:
+                sys.stderr.write("Warning: Timezone defined but unable to perform timezone conversion using 'zoneinfo' "
+                                 "module. Timestamps will be displayed in UTC timezone.\n\n")
+        else:
+            try:
+                import pytz
+                if options.timezone:
+                    try:
+                        timezone = pytz.timezone(options.timezone)
+                    except Exception:
+                        sys.stderr.write("Warning: could not recognize timezone '%s' specified in cqlshrc\n\n" % (options.timezone))
+                if 'TZ' in os.environ:
+                    try:
+                        timezone = pytz.timezone(os.environ['TZ'])
+                    except Exception:
+                        sys.stderr.write("Warning: could not recognize timezone '%s' from environment value TZ\n\n" % (os.environ['TZ']))
+            except ImportError:
+                sys.stderr.write("Warning: Timezone defined and 'pytz' module for timezone conversion not installed. Timestamps will be displayed in UTC timezone.\n\n")
 
     # try auto-detect timezone if tzlocal is installed
     if not timezone:
@@ -2387,18 +2383,12 @@ def main(options, hostname, port):
 
         signal.signal(signal.SIGHUP, handle_sighup)
 
+    shell.init_history()
     shell.cmdloop()
-    save_history()
+    shell.save_history()
 
     if shell.batch_mode and shell.statement_error:
         sys.exit(2)
 
-
-# always call this regardless of module name: when a sub-process is spawned
-# on Windows then the module name is not __main__, see CASSANDRA-9304 (Windows support was dropped in CASSANDRA-16956)
-insert_driver_hooks()
-
-if __name__ == '__main__':
-    main(*read_options(sys.argv[1:], os.environ))
 
 # vim: set ft=python et ts=4 sw=4 :
