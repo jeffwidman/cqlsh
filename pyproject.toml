@@ -4,3 +4,41 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "cqlsh"
+version = "6.2.0"
+authors = [
+    {name = "Jeff Widman", email = "jeff@jeffwidman.com"},
+    {name = "Brad Schoening"},
+]
+description = "cqlsh is a Python-based command-line client for running CQL commands on a cassandra cluster."
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["cql", "cassandra", "cqlsh"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "cassandra-driver",
+    "pure-sasl",
+    "wcwidth"
+]
+
+[project.urls]
+Documentation = "https://cassandra.apache.org/doc/latest/tools/cqlsh.html"
+Issues = "https://github.com/jeffwidman/cqlsh/issues"
+Changelog = "https://github.com/jeffwidman/cqlsh#changelog"
+
+[project.scripts]
+cqlsh = "cqlshlib.__main__:main"
