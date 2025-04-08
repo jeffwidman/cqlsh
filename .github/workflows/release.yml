@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - ci-cd
-    # tags:
-    #   - '*.*.*'
+    tags:
+      - 'v*.*.*'
 
 defaults:
   run:
