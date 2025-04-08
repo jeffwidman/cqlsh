@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env python3
+
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -15,93 +16,70 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# shell script to find a suitable Python interpreter and run cqlsh.py
+import os
+import platform
+import sys
+from glob import glob
 
-# Use the Python that is specified in the env
-if [ -n "$CQLSH_PYTHON" ]; then
-    USER_SPECIFIED_PYTHON="$CQLSH_PYTHON"
-fi
+# see CASSANDRA-10428
+if platform.python_implementation().startswith('Jython'):
+    sys.exit("\nCQL Shell does not run on Jython\n")
 
+CQL_LIB_PREFIX = 'cassandra-driver-internal-only-'
 
-# filter "--python" option and its value, and keep remaining arguments as it is
-USER_SPECIFIED_PYTHON_OPTION=false
-for arg do
-  shift
-  case "$arg" in
-    --python)
-        USER_SPECIFIED_PYTHON_OPTION=true
-        ;;
-    --)
-        break
-        ;;
-    *)
-        if [ "$USER_SPECIFIED_PYTHON_OPTION" = true ] ; then
-            USER_SPECIFIED_PYTHON_OPTION=false
-            USER_SPECIFIED_PYTHON="$arg"
-        else
-            set -- "$@" "$arg"
-        fi
-        ;;
-  esac
-done
+CASSANDRA_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 
-if [ "$USER_SPECIFIED_PYTHON_OPTION" = true ] ; then
-    echo "You must specify a python interpreter path with the --python option"
-    exit 1
-fi
+# use bundled lib for python-cql if available. if there
+# is a ../lib dir, use bundled libs there preferentially.
+ZIPLIB_DIRS = [os.path.join(CASSANDRA_PATH, 'lib')]
 
-# get a version string for a Python interpreter
-get_python_version() {
-    interpreter=$1
-    version=$($interpreter -c "import os; print('{}.{}'.format(os.sys.version_info.major, os.sys.version_info.minor))" 2> /dev/null)
-    echo "$version"
-}
+if platform.system() == 'Linux':
+    ZIPLIB_DIRS.append('/usr/share/cassandra/lib')
 
-# test whether a version string matches one of the supported versions for cqlsh
-is_supported_version() {
-    version=$1
-    major_version="${version%.*}"
-    minor_version="${version#*.}"
-    # python 3.8-3.11 are supported
-    if [ "$major_version" = 3 ] && [ "$minor_version" -ge 8 ] && [ "$minor_version" -le 11 ]; then
-        echo "supported"
-    # python 3.6-3.7 are deprecated
-    elif [ "$major_version" = 3 ] && [ "$minor_version" -ge 6 ] && [ "$minor_version" -le 7 ]; then
-        echo "deprecated"
-    else
-        echo "unsupported"
-    fi
-}
-
-run_if_supported_version() {
-    # get the interpreter and remove it from argument
-    interpreter="$1" shift
-
-    version=$(get_python_version "$interpreter")
-    version_status=$(is_supported_version "$version")
-    if [ -n "$version" ]; then
-        if [ "$version_status" = "supported" ] || [ "$version_status" = "deprecated" ]; then
-            if [ "$version_status" = "deprecated" ]; then
-                echo "Warning: using deprecated version of Python:" "$version" >&2
-            fi
-
-            exec "$interpreter" "$($interpreter -c "import os; print(os.path.dirname(os.path.realpath('$0')))")/cqlsh.py" "$@"
-            exit
-        else
-            echo "Warning: unsupported version of Python, required 3.6-3.11 but found" "$version" >&2
-        fi
-    fi
-}
+if os.environ.get('CQLSH_NO_BUNDLED', ''):
+    ZIPLIB_DIRS = ()
 
 
-if [ "$USER_SPECIFIED_PYTHON" != "" ]; then
-    # run a user specified Python interpreter
-    run_if_supported_version "$USER_SPECIFIED_PYTHON" "$@"
-else
-    for interpreter in python3 python; do
-        run_if_supported_version "$interpreter" "$@"
-    done
-fi
+def find_zip(libprefix):
+    for ziplibdir in ZIPLIB_DIRS:
+        zips = glob(os.path.join(ziplibdir, libprefix + '*.zip'))
+        if zips:
+            return max(zips)   # probably the highest version, if multiple
 
-echo "No appropriate Python interpreter found." >&2
-exit 1
+
+cql_zip = find_zip(CQL_LIB_PREFIX)
+if cql_zip:
+    ver = os.path.splitext(os.path.basename(cql_zip))[0][len(CQL_LIB_PREFIX):]
+    sys.path.insert(0, os.path.join(cql_zip, 'cassandra-driver-' + ver))
+
+# the driver needs dependencies
+third_parties = ('pure_sasl-', 'wcwidth-')
+
+for lib in third_parties:
+    lib_zip = find_zip(lib)
+    if lib_zip:
+        sys.path.insert(0, lib_zip)
+
+try:
+    import cassandra
+except ImportError as e:
+    sys.exit("\nPython Cassandra driver not installed, or not on PYTHONPATH.\n"
+             'You might try "pip install cassandra-driver".\n\n'
+             'Python: %s\n'
+             'Module load path: %r\n\n'
+             'Error: %s\n' % (sys.executable, sys.path, e))
+
+
+# cqlsh should run correctly when run out of a Cassandra source tree,
+# out of an unpacked Cassandra tarball, and after a proper package install.
+cqlshlibdir = os.path.join(CASSANDRA_PATH, 'pylib')
+if os.path.isdir(cqlshlibdir):
+    sys.path.insert(0, cqlshlibdir)
+
+from cqlshlib.cqlshmain import main
+
+# always call this regardless of module name: when a sub-process is spawned
+# on Windows then the module name is not __main__, see CASSANDRA-9304 (Windows support was dropped in CASSANDRA-16956)
+
+if __name__ == '__main__':
+    main(sys.argv[1:], CASSANDRA_PATH)
