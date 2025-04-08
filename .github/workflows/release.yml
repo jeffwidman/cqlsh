@@ -24,6 +24,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
         run: |
+          if [[ "$GITHUB_REF_NAME" != "main" && "$GITHUB_REF_NAME" != "master" ]]; then
+            exit 0
+          fi
           OPTIONS=""
           if [[ $GITHUB_REF_NAME == *"internal"* ]]; then
             OPTIONS="--prerelease"
