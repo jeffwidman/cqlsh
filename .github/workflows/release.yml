@@ -1,0 +1,143 @@
+name: Compile
+
+on:
+  push:
+    branches:
+      - ci-cd
+    # tags:
+    #   - '*.*.*'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+        run: |
+          OPTIONS=""
+          if [[ $GITHUB_REF_NAME == *"internal"* ]]; then
+            OPTIONS="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="Release for ${GITHUB_REF_NAME}" \
+              --generate-notes $OPTIONS
+  build:
+    name: Build on ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    needs: [release]
+    strategy:
+      matrix:
+        include:
+          - os: [self-hosted, linux, X64]
+            target: Linux
+
+          # M1
+          - os: macos-14
+            target: Macos
+
+          # X86
+          - os: macos-13
+            target: Macos
+
+          - os: windows-latest
+            target: Windows
+
+          - os: [self-hosted, linux, ARM64]
+            target: Linux
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set binaries version
+        run: sed -i.bak "s/^CUSTOM_VERSION.*/CUSTOM_VERSION = '$GITHUB_REF_NAME'/g" cqlsh/cqlsh.py
+
+      - name: Setup Python v3.12
+        uses: actions/setup-python@v5
+        if: ${{ matrix.target != 'Linux' }}
+        with:
+          python-version: 3.12
+
+      # statix won't install in Windows nor we need it
+      - name: Install dependencies
+        run: |
+          if [[ "$(uname -s)" =~ "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get -y install patchelf scons
+          fi
+          if [ -x /home/github/py312/bin/pip3 ]; then
+            source /home/github/py312/bin/activate
+            pip3 install wheel setuptools
+            pip3 install staticx==0.14.1
+            pip3 install wheel setuptools
+          else
+            pip3 install wheel setuptools
+          fi
+
+          pip3 install -r requirements.txt
+
+      # nasty hack to use our local python is avaialble. The one provided by GitHub does not appear
+      # to work for ARM64 Linux
+      - name: Build binaries for cqlsh
+        run: |
+          if [ -x /home/github/py312/bin/pip3 ]; then
+            source /home/github/py312/bin/activate
+          fi
+
+          mkdir -p dist
+
+          if [[ "$(uname -s)" =~ "Linux" ]]; then
+            mkdir -p dist/cqlsh-$(uname -s)-$(uname -m)
+            pyinstaller --noconfirm --clean --noupx --onefile cqlsh.py -n cqlsh-dyn-$(uname -s)-$(uname -m)
+            staticx dist/cqlsh-dyn-$(uname -s)-$(uname -m) dist/cqlsh-$(uname -s)-$(uname -m)/cqlsh-$(uname -s)-$(uname -m)
+          else
+            pyinstaller --noconfirm --clean --noupx cqlsh.py -n cqlsh-$(uname -s)-$(uname -m)
+          fi
+          rm -rf dist/*-dyn-*
+
+          for target in cqlsh-$(uname -s)-$(uname -m); do
+            (cd dist && tar cpf $(basename $target).tar $target)
+          done
+
+      - name: Upload artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/cqlsh*tar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-sbom:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: ${{ !cancelled() && success() && !contains(github.ref, 'internal') }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v20.17.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.17.0
+
+      - name: Generate SBOM 1/2
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: sbom.spdx.json
+
+      - name: Generate SBOM 2/2
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: sbom.cyclonedx.json
+          format: cyclonedx-json
