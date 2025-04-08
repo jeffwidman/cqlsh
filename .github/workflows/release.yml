@@ -75,6 +75,7 @@ jobs:
           if [[ "$(uname -s)" =~ "Linux" ]]; then
             sudo apt-get update
             sudo apt-get -y install patchelf scons
+            pip3 install staticx==0.14.1
           fi
           if [ -x /home/github/py312/bin/pip3 ]; then
             source /home/github/py312/bin/activate
