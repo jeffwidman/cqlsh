@@ -42,7 +42,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: [self-hosted, linux, X64]
+          - os: ubuntu-latest
             target: Linux
 
           # M1
@@ -56,7 +56,7 @@ jobs:
           - os: windows-latest
             target: Windows
 
-          - os: [self-hosted, linux, ARM64]
+          - os: ubuntu-latest-arm
             target: Linux
 
     steps:
@@ -80,7 +80,6 @@ jobs:
             source /home/github/py312/bin/activate
             pip3 install wheel setuptools
             pip3 install staticx==0.14.1
-            pip3 install wheel setuptools
           else
             pip3 install wheel setuptools
           fi

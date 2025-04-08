@@ -29,3 +29,4 @@ zipp==3.19.2
 pyreadline3
 wcwidth
 json_repair
+staticx==0.14.1
