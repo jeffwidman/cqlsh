@@ -111,6 +111,7 @@ jobs:
           done
 
       - name: Upload artifacts
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -118,26 +119,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  generate-sbom:
-    runs-on: ubuntu-latest
-    needs: [build]
-    if: ${{ !cancelled() && success() && !contains(github.ref, 'internal') }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js v20.17.0
-        uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type != 'tag'
         with:
-          node-version: 20.17.0
-
-      - name: Generate SBOM 1/2
-        uses: anchore/sbom-action@v0
-        with:
-          artifact-name: sbom.spdx.json
-
-      - name: Generate SBOM 2/2
-        uses: anchore/sbom-action@v0
-        with:
-          artifact-name: sbom.cyclonedx.json
-          format: cyclonedx-json
+          name: cqlsh
+          path: |
+            dist/*.tar
