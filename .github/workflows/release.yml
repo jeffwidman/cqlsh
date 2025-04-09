@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches:
+      - ci-cd
 
 defaults:
   run:
@@ -85,25 +87,38 @@ jobs:
 
           pip3 install -r requirements.txt
 
-      # nasty hack to use our local python is avaialble. The one provided by GitHub does not appear
-      # to work for ARM64 Linux
+      - name: Decode and import Apple certificate
+        if: runner.os == 'Darwin'
+        run: |
+          echo "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
       - name: Build binaries for cqlsh
         run: |
           if [ -x /home/github/py312/bin/pip3 ]; then
             source /home/github/py312/bin/activate
           fi
 
-          mkdir -p dist
+          mkdir -p dist onefile
 
           if [[ "$(uname -s)" =~ "Linux" ]]; then
             mkdir -p dist/cqlsh-$(uname -s)-$(uname -m)
             pyinstaller --noconfirm --clean --noupx --onefile cqlsh.py -n cqlsh-dyn-$(uname -s)-$(uname -m)
             staticx dist/cqlsh-dyn-$(uname -s)-$(uname -m) dist/cqlsh-$(uname -s)-$(uname -m)/cqlsh-$(uname -s)-$(uname -m)
+          elif [[ "$(uname -s)" =~ "Darwin" ]]; then
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
           else
             pyinstaller --noconfirm --clean --noupx cqlsh.py -n cqlsh-$(uname -s)-$(uname -m)
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
           fi
           rm -rf dist/*-dyn-*
-          ls -l dist/
+          echo "WINDOWS_EXE=$(ls -1 dist/cqlsh*/*.exe)" >> $GITHUB_ENV
 
       # - name: Azure login
       #   if: runner.os == 'Windows'
@@ -126,8 +141,7 @@ jobs:
       # - name: Build signed installer
       #   if: runner.os == 'Windows'
       #   run: |
-      #     azuresigntool.exe sign --verbose -kvu ${{ secrets.AZURE_KEY_VAULT_URI }} -kvc ${{ secrets.AZURE_KEYVAULT_CERT_NAME }} -kva %AZ_TOKEN% -fd sha256 -tr http://timestamp.digicert.com -v "dist/AxonOps.Workbench-%VERSION%-win-x64.exe"
-      #     azuresigntool.exe sign --verbose -kvu ${{ secrets.AZURE_KEY_VAULT_URI }} -kvc ${{ secrets.AZURE_KEYVAULT_CERT_NAME }} -kva %AZ_TOKEN% -fd sha256 -tr http://timestamp.digicert.com -v "dist/AxonOps.Workbench-%VERSION%-win-x64.msi"
+      #     azuresigntool.exe sign --verbose -kvu ${{ secrets.AZURE_KEY_VAULT_URI }} -kvc ${{ secrets.AZURE_KEYVAULT_CERT_NAME }} -kva %AZ_TOKEN% -fd sha256 -tr http://timestamp.digicert.com -v "%WINDOWS_EXE%"
       #   shell: cmd
       
       - name: Packages
@@ -135,7 +149,6 @@ jobs:
           for target in cqlsh-$(uname -s)-$(uname -m); do
             (cd dist && tar cpf $(basename $target).tar $target)
           done
-          ls -l dist/
 
       - name: Upload artifacts
         if: github.ref_type == 'tag'
