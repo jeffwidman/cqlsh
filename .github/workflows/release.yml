@@ -42,22 +42,22 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            target: Linux
-
           # M1
           - os: macos-14
             target: Macos
 
-          # X86
-          - os: macos-13
-            target: Macos
+          # # X86
+          # - os: macos-13
+          #   target: Macos
 
-          - os: windows-latest
-            target: Windows
+          # - os: windows-latest
+          #   target: Windows
 
-          - os: ubuntu-24.04-arm
-            target: Linux
+          # - os: ubuntu-24.04-arm
+          #   target: Linux
+
+          # - os: ubuntu-latest
+          #   target: Linux
 
     steps:
       - name: Checkout Repository
@@ -114,8 +114,10 @@ jobs:
             pyinstaller --noconfirm --clean --noupx --onefile cqlsh.py -n cqlsh-dyn-$(uname -s)-$(uname -m)
             staticx dist/cqlsh-dyn-$(uname -s)-$(uname -m) dist/cqlsh-$(uname -s)-$(uname -m)/cqlsh-$(uname -s)-$(uname -m)
           elif [[ "$(uname -s)" =~ "Darwin" ]]; then
-            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
-            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
+            #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
+            #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
+            codesign -s "Apple Development: sergio.rua@axonops.com (3VUJ5925QK)" -o runtime onefile/cqlsh-onefile-$(uname -s)-$(uname -m) --force
           else
             pyinstaller --noconfirm --clean --noupx cqlsh.py -n cqlsh-$(uname -s)-$(uname -m)
             pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
@@ -159,6 +161,7 @@ jobs:
         with:
           files: |
             dist/cqlsh*tar
+            onefile/cqlsh-onefile*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -168,3 +171,4 @@ jobs:
           name: cqlsh-${{ matrix.target }}-${{ matrix.os }}
           path: |
             dist/cqlsh*.tar
+            onefile/cqlsh-onefile*
