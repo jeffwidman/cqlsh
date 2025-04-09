@@ -70,12 +70,11 @@ jobs:
           python-version: 3.12
 
       - name: Decode and import Apple certificate
-        if: ${{ matrix.target == 'Macos' }}
+        if: ${{ runner.os == 'macOS' }}
         run: |
           if [[ "$(uname -s)" =~ "Darwin" ]]; then
             # create variables
             CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-            PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
             KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
             # import certificate and provisioning profile from secrets
@@ -190,8 +189,6 @@ jobs:
       - name: Clean up keychain and provisioning profile
         if: ${{ always() }}
         run: |
-          echo ${{ runner.os }}
           if [[ "$(uname -s)" =~ "Darwin" ]]; then
             security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
-            rm ~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision
           fi
