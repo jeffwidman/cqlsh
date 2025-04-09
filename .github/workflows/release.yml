@@ -118,6 +118,7 @@ jobs:
             #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
 
             security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            security find-identity -v -p codesigning
             pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
             codesign -s "Apple Development: sergio.rua@axonops.com (3VUJ5925QK)" -o runtime --entitlements resources/entitlements.plist onefile/cqlsh-onefile-$(uname -s)-$(uname -m) --force
           else
@@ -126,6 +127,8 @@ jobs:
           fi
           rm -rf dist/*-dyn-*
           echo "WINDOWS_EXE=$(ls -1 dist/cqlsh*/*.exe)" >> $GITHUB_ENV
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
 
       # - name: Azure login
       #   if: runner.os == 'Windows'
