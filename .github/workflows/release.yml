@@ -46,18 +46,18 @@ jobs:
           - os: macos-14
             target: Macos
 
-          # # X86
-          # - os: macos-13
-          #   target: Macos
+          # X86
+          - os: macos-13
+            target: Macos
 
-          # - os: windows-latest
-          #   target: Windows
+          - os: windows-latest
+            target: Windows
 
-          # - os: ubuntu-24.04-arm
-          #   target: Linux
+          - os: ubuntu-24.04-arm
+            target: Linux
 
-          # - os: ubuntu-latest
-          #   target: Linux
+          - os: ubuntu-latest
+            target: Linux
 
     steps:
       - name: Checkout Repository
