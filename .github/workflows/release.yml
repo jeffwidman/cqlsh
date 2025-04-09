@@ -78,7 +78,6 @@ jobs:
             security import certificate.p12 -k build.keychain -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
             security list-keychains -s build.keychain
             security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-            security find-identity -v -p codesigning
           fi
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -103,6 +102,7 @@ jobs:
 
       - name: Build binaries for cqlsh
         run: |
+          set -x
           if [ -x /home/github/py312/bin/pip3 ]; then
             source /home/github/py312/bin/activate
           fi
@@ -116,8 +116,10 @@ jobs:
           elif [[ "$(uname -s)" =~ "Darwin" ]]; then
             #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
             #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
+
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
             pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
-            codesign -s "Apple Development: sergio.rua@axonops.com (3VUJ5925QK)" -o runtime onefile/cqlsh-onefile-$(uname -s)-$(uname -m) --force
+            codesign -s "Apple Development: sergio.rua@axonops.com (3VUJ5925QK)" -o runtime --entitlements resources/entitlements.plist onefile/cqlsh-onefile-$(uname -s)-$(uname -m) --force
           else
             pyinstaller --noconfirm --clean --noupx cqlsh.py -n cqlsh-$(uname -s)-$(uname -m)
             pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
