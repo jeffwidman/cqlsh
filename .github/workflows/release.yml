@@ -73,11 +73,23 @@ jobs:
         if: ${{ matrix.target == 'Macos' }}
         run: |
           if [[ "$(uname -s)" =~ "Darwin" ]]; then
-            echo "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" | base64 --decode > certificate.p12
-            security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-            security import certificate.p12 -k build.keychain -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
-            security list-keychains -s build.keychain
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            # create variables
+            CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+            PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+            # import certificate and provisioning profile from secrets
+            echo -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" | base64 --decode -o $CERTIFICATE_PATH
+
+            # create temporary keychain
+            security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+            # import certificate to keychain
+            security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+            security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            security list-keychain -d user -s $KEYCHAIN_PATH
           fi
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -114,13 +126,8 @@ jobs:
             pyinstaller --noconfirm --clean --noupx --onefile cqlsh.py -n cqlsh-dyn-$(uname -s)-$(uname -m)
             staticx dist/cqlsh-dyn-$(uname -s)-$(uname -m) dist/cqlsh-$(uname -s)-$(uname -m)/cqlsh-$(uname -s)-$(uname -m)
           elif [[ "$(uname -s)" =~ "Darwin" ]]; then
-            #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
-            #pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
-
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-            security find-identity -v -p codesigning
-            pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
-            codesign -s "Apple Development: sergio.rua@axonops.com (3VUJ5925QK)" -o runtime --entitlements resources/entitlements.plist onefile/cqlsh-onefile-$(uname -s)-$(uname -m) --force
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist -n cqlsh-$(uname -s)-$(uname -m)
+            pyinstaller --noconfirm --clean --noupx cqlsh.py --codesign-identity ${{ secrets.APPLE_IDENTITY }} --osx-entitlements-file resources/entitlements.plist --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
           else
             pyinstaller --noconfirm --clean --noupx cqlsh.py -n cqlsh-$(uname -s)-$(uname -m)
             pyinstaller --noconfirm --clean --noupx cqlsh.py --distpath onefile --onefile -n cqlsh-onefile-$(uname -s)-$(uname -m)
@@ -177,3 +184,12 @@ jobs:
           path: |
             dist/cqlsh*.tar
             onefile/cqlsh-onefile*
+
+      - name: Clean up keychain and provisioning profile
+        if: ${{ always() }}
+        run: |
+          echo ${{ runner.os }}
+          if [[ "$(uname -s)" =~ "Darwin" ]]; then
+            security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
+            rm ~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision
+          fi
