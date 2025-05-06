@@ -24,7 +24,7 @@ $ cqlsh --help
 
 ### Documentation:
 
-Documentation is available as part of the official [Apache Cassandra™ documentation](https://cassandra.apache.org/doc/latest/tools/cqlsh.html).
+Documentation is available as part of the official [Apache Cassandra™ documentation](https://cassandra.apache.org/doc/latest/cassandra/managing/tools/cqlsh.html).
 
 ### Contributing:
 
