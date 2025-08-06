@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cqlsh"
-version = "6.2.0"
+version = "6.2.1"
 authors = [
     {name = "Jeff Widman", email = "jeff@jeffwidman.com"},
     {name = "Brad Schoening"},

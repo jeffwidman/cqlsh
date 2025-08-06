@@ -60,6 +60,13 @@ Unfortunately the Cassandra project does not always increment the `cqlsh` versio
 release we need to document not only the `cqlsh` version but also the `cassandra` version in which it
 shipped.
 
+#### 6.2.1 (August 6, 2025)
+
+This packages `cqlsh` `6.2.0` from [Cassandra 5.0.5](https://github.com/apache/cassandra/blob/cassandra-5.0.5/pylib/cqlshlib):
+ * Avoid CQLSH throwing an exception loading .cqlshrc on non-supported platforms (CASSANDRA-20478)
+ * Fix text containing "/*" being interpreted as multiline comment in cqlsh (CASSANDRA-17667)
+ * Fix autocompletion for role names/user names (CASSANDRA-20175)
+
 #### 6.2.0 (September 16, 2024)
 
 This packages `cqlsh` `6.2.0` from [Cassandra 5.0.0](https://github.com/apache/cassandra/blob/cassandra-5.0.0/pylib/cqlshlib):
