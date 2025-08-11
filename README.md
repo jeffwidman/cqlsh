@@ -22,6 +22,11 @@ $ pip install -U cqlsh
 $ cqlsh --help
 ```
 
+### Building from source:
+```
+python -m build
+```
+
 ### Documentation:
 
 Documentation is available as part of the official [Apache Cassandra™ documentation](https://cassandra.apache.org/doc/latest/cassandra/managing/tools/cqlsh.html).
