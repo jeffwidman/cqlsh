@@ -41,6 +41,12 @@ Steps to sanity check that the packaging works as expected:
 ```
 $ pip install -e .  # run from within the cqlsh directory
 ```
+or build and install it
+
+```
+$ python -m build
+$ python -m pip install dist/*.whl
+```
 2. Start a local copy of Cassandra:
 ```
 $ docker pull cassandra
