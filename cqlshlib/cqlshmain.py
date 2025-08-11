@@ -60,7 +60,7 @@ except ImportError:
 UTF8 = 'utf-8'
 
 description = "CQL Shell for Apache Cassandra"
-version = "6.2.0"
+version = "6.2.1"
 
 readline = None
 try:
