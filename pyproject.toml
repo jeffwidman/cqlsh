@@ -35,6 +35,7 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/jeffwidman/cqlsh"
 Documentation = "https://cassandra.apache.org/doc/latest/tools/cqlsh.html"
 Issues = "https://github.com/jeffwidman/cqlsh/issues"
 Changelog = "https://github.com/jeffwidman/cqlsh#changelog"
