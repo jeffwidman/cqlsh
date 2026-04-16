@@ -67,7 +67,7 @@ release we need to document not only the `cqlsh` version but also the `cassandra
 shipped.
 
 #### 6.2.2 (April 16, 2026)
-This packages `cqlsh` `6.2.0` from [Cassandra 5.0.5](https://github.com/apache/cassandra/blob/cassandra-5.0.5/pylib/cqlshlib):
+This packages `cqlsh` `6.2.0` from [Cassandra 5.0.7](https://github.com/apache/cassandra/blob/cassandra-5.0.7/pylib/cqlshlib):
 
  * Update pyproject.toml Python versions (drop 3.9; add 3.13 & 3.14).
  * Add --disable-history support and a corresponding [history] disabled config option.
