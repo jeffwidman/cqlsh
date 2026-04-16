@@ -7,14 +7,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cqlsh"
-version = "6.2.1"
+version = "6.2.2"
 authors = [
     {name = "Jeff Widman", email = "jeff@jeffwidman.com"},
     {name = "Brad Schoening"},
 ]
 description = "cqlsh is a Python-based command-line client for running CQL commands on a cassandra cluster."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["cql", "cassandra", "cqlsh"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -23,10 +23,11 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "cassandra-driver",
